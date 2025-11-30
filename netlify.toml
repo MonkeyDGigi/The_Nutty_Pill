@@ -1,0 +1,13 @@
+[build]
+  base = "cashu-me"
+  command = "npm install && npm run build"
+  publish = "cashu-me/dist/spa"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+

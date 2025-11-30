@@ -1,0 +1,896 @@
+$themes: (
+  "retro": (
+    primary: #9D4EDD,
+    secondary: #7B2CBF,
+    dark: #1A0D2E,
+    info: #4A148C,
+    marginal-bg: #1A0D2E,
+    marginal-text: #9D4EDD,
+  ),
+  "ios": (
+    primary: #007AFF,
+    secondary: #5856D6,
+    dark: #F2F2F7,
+    info: #FFFFFF,
+    marginal-bg: #F2F2F7,
+    marginal-text: #000000,
+  ),
+  "windows95": (
+    primary: #000080,
+    secondary: #008080,
+    dark: #C0C0C0,
+    info: #FFFFFF,
+    marginal-bg: #C0C0C0,
+    marginal-text: #000000,
+  ),
+  "matrix": (
+    primary: #00FF41,
+    secondary: #00CC33,
+    dark: #000000,
+    info: #001100,
+    marginal-bg: #000000,
+    marginal-text: #00FF41,
+  ),
+  "neon": (
+    primary: #FF00FF,
+    secondary: #00FFFF,
+    dark: #0A0A0A,
+    info: #1A1A2E,
+    marginal-bg: #0A0A0A,
+    marginal-text: #FF00FF,
+  ),
+  "kawaii": (
+    primary: #a5d8ff,
+    secondary: #ff6ec7,
+    dark: #ffeefb,
+    info: #ffffff,
+    marginal-bg: #ffeefb,
+    marginal-text: #ff6ec7,
+  ),
+);
+@each $theme, $colors in $themes {
+  @each $name, $color in $colors {
+    @if $name== "dark" {
+      [data-theme="#{$theme}"] .q-drawer--dark,
+      body[data-theme="#{$theme}"].body--dark,
+      [data-theme="#{$theme}"] .q-menu--dark {
+        background: $color !important;
+      }
+      // set a darker body bg for all themes, when in "dark mode"
+      body[data-theme="#{$theme}"].body--dark {
+        background: scale-color($color, $lightness: -60%);
+      }
+    }
+    @if $name== "info" {
+      [data-theme="#{$theme}"] .q-card--dark,
+      [data-theme="#{$theme}"] .q-stepper--dark {
+        background: $color !important;
+      }
+    }
+  }
+  [data-theme="#{$theme}"] {
+    @each $name, $color in $colors {
+      .bg-#{$name} {
+        background: $color !important;
+      }
+      .text-#{$name} {
+        color: $color !important;
+      }
+    }
+  }
+}
+
+@each $theme, $colors in $themes {
+  [data-theme="#{$theme}"] {
+    @each $name, $color in $colors {
+      @if $name == "primary" {
+        --q-primary: #{$color};
+      }
+      @if $name == "secondary" {
+        --q-secondary: #{$color};
+      }
+    }
+    @each $name, $color in $colors {
+      .bg-#{$name} {
+        background: $color !important;
+      }
+      .text-#{$name} {
+        color: $color !important;
+      }
+    }
+  }
+}
+
+// Minimalistic Theme Specific Styles (with fallback for private mode)
+[data-theme="retro"] .q-drawer--dark,
+body[data-theme="retro"].body--dark,
+[data-theme="retro"] .q-menu--dark,
+body:not([data-theme]) .q-drawer--dark,
+body:not([data-theme]).body--dark,
+body:not([data-theme]) .q-menu--dark {
+  background: #1A0D2E !important; /* Dark Purple */
+  border-right: 1px solid rgba(157, 78, 221, 0.2) !important;
+}
+
+[data-theme="retro"] .q-header,
+body:not([data-theme]) .q-header {
+  background: #1A0D2E !important; /* Dark Purple */
+  border-bottom: 1px solid rgba(157, 78, 221, 0.2) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+[data-theme="retro"] .q-card--dark,
+[data-theme="retro"] .q-stepper--dark,
+body:not([data-theme]) .q-card--dark,
+body:not([data-theme]) .q-stepper--dark {
+  background: #4A148C !important; /* Medium Purple */
+  border: 1px solid rgba(157, 78, 221, 0.3) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+}
+
+body[data-theme="retro"].body--dark,
+body:not([data-theme]).body--dark {
+  background: #1A0D2E !important; /* Dark Purple */
+}
+
+[data-theme="retro"] .q-btn.bg-primary,
+body:not([data-theme]) .q-btn.bg-primary {
+  background: transparent !important;
+  color: #9D4EDD !important;
+  border: 1px solid rgba(157, 78, 221, 0.3) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  font-size: 14px !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-theme="retro"] .q-btn.bg-primary:hover,
+body:not([data-theme]) .q-btn.bg-primary:hover {
+  background: #9D4EDD !important;
+  color: #FFFFFF !important;
+  border-color: #9D4EDD !important;
+  box-shadow: 0 2px 8px rgba(157, 78, 221, 0.3) !important;
+  transform: translateY(-1px) !important;
+}
+
+[data-theme="retro"] .q-btn.bg-primary:active,
+body:not([data-theme]) .q-btn.bg-primary:active {
+  background: #7B2CBF !important;
+  transform: translateY(0) !important;
+}
+
+[data-theme="retro"] .q-badge.bg-primary,
+body:not([data-theme]) .q-badge.bg-primary {
+  background: #9D4EDD !important;
+  color: #FFFFFF !important;
+  border: 1px solid rgba(157, 78, 221, 0.3) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+  font-size: 11px !important;
+}
+
+// Minimalistic Text styling
+[data-theme="retro"] *,
+body:not([data-theme]) * {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+[data-theme="retro"] h1,
+[data-theme="retro"] h2,
+[data-theme="retro"] h3,
+[data-theme="retro"] h4,
+[data-theme="retro"] h5,
+[data-theme="retro"] h6,
+[data-theme="retro"] p,
+[data-theme="retro"] span,
+[data-theme="retro"] div,
+[data-theme="retro"] label,
+body:not([data-theme]) h1,
+body:not([data-theme]) h2,
+body:not([data-theme]) h3,
+body:not([data-theme]) h4,
+body:not([data-theme]) h5,
+body:not([data-theme]) h6,
+body:not([data-theme]) p,
+body:not([data-theme]) span,
+body:not([data-theme]) div,
+body:not([data-theme]) label {
+  color: #9D4EDD !important;
+  text-shadow: none !important;
+}
+
+[data-theme="retro"] a,
+body:not([data-theme]) a {
+  color: #9D4EDD !important;
+  text-shadow: none !important;
+}
+
+[data-theme="retro"] a:hover,
+body:not([data-theme]) a:hover {
+  color: #B794F6 !important; /* Lighter purple */
+  text-shadow: none !important;
+}
+
+[v-cloak] {
+  display: none;
+}
+
+body.body--dark .q-table--dark {
+  background: transparent;
+}
+
+body.body--dark .q-field--error {
+  .text-negative,
+  .q-field__messages {
+    color: yellow !important;
+  }
+}
+
+.qcard {
+  width: 500px;
+}
+
+.q-table--dense {
+  th:first-child,
+  td:first-child,
+  .q-table__bottom {
+    padding-left: 6px !important;
+  }
+  th:last-child,
+  td:last-child,
+  .q-table__bottom {
+    padding-right: 6px !important;
+  }
+}
+
+a {
+  color: var(--primary-color);
+  text-decoration: underline;
+  font-weight: bold;
+}
+
+a.inherit {
+  color: inherit;
+  text-decoration: none;
+}
+
+// QR video
+video {
+  border-radius: 3px;
+}
+
+// Material icons font
+@font-face {
+  font-family: "Material Icons";
+  font-style: normal;
+  font-weight: 400;
+  src: url(../fonts/material-icons-v50.woff2) format("woff2");
+}
+
+.material-icons {
+  font-family: "Material Icons";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -moz-font-feature-settings: "liga";
+  font-feature-settings: "liga";
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.q-rating__icon {
+  font-size: 1em;
+}
+
+// text-wrap
+.text-wrap {
+  word-break: break-word;
+}
+
+.q-card {
+  code {
+    overflow-wrap: break-word;
+  }
+}
+
+.q-card {
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2), 0 2px 2px rgba(0, 0, 0, 0.14),
+    0 3px 1px -2px rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  vertical-align: top;
+}
+
+.shadow-2 {
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2), 0 2px 2px rgba(0, 0, 0, 0.14),
+    0 3px 1px -2px rgba(0, 0, 0, 0.12);
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+// ============================================
+// iOS THEME - Clean, modern, rounded with glass effects
+// ============================================
+@keyframes iosBubbleFloat {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(20px, -30px) scale(1.1);
+  }
+  50% {
+    transform: translate(-15px, -50px) scale(0.9);
+  }
+  75% {
+    transform: translate(30px, -20px) scale(1.05);
+  }
+}
+
+@keyframes iosBubbleFloat2 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(-25px, -40px) scale(1.15);
+  }
+  66% {
+    transform: translate(20px, -60px) scale(0.85);
+  }
+}
+
+body[data-theme="ios"] {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif !important;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #4facfe 75%, #00f2fe 100%) !important;
+  background-size: 400% 400% !important;
+  animation: gradientShift 15s ease infinite !important;
+  position: relative !important;
+  overflow-x: hidden !important;
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+body[data-theme="ios"]::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.2) 0%, transparent 50%),
+    radial-gradient(circle at 40% 20%, rgba(255, 255, 255, 0.25) 0%, transparent 50%);
+  background-size: 200% 200%, 180% 180%, 220% 220%;
+  animation: iosBubbleFloat 20s ease-in-out infinite, gradientShift 15s ease infinite;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(40px);
+  -webkit-filter: blur(40px);
+}
+
+body[data-theme="ios"]::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    radial-gradient(circle at 60% 30%, rgba(255, 255, 255, 0.2) 0%, transparent 45%),
+    radial-gradient(circle at 30% 70%, rgba(255, 255, 255, 0.15) 0%, transparent 40%);
+  background-size: 250% 250%, 200% 200%;
+  animation: iosBubbleFloat2 25s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(60px);
+  -webkit-filter: blur(60px);
+}
+
+[data-theme="ios"] {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+[data-theme="ios"] .q-page,
+[data-theme="ios"] .q-layout {
+  position: relative;
+  z-index: 1;
+}
+
+[data-theme="ios"] .q-card,
+[data-theme="ios"] .q-dialog__inner > div {
+  border-radius: 20px !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  position: relative;
+  z-index: 1;
+}
+
+[data-theme="ios"] .q-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  border-radius: 20px 20px 0 0;
+}
+
+[data-theme="ios"] .q-btn {
+  border-radius: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.2px !important;
+  box-shadow: none !important;
+  border: none !important;
+  background: rgba(255, 255, 255, 0.6) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+
+[data-theme="ios"] .q-btn.bg-primary {
+  background: rgba(0, 122, 255, 0.8) !important;
+  color: #FFFFFF !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+
+[data-theme="ios"] .q-btn.bg-primary:hover {
+  background: rgba(0, 81, 213, 0.9) !important;
+  box-shadow: none !important;
+}
+
+[data-theme="ios"] .q-header {
+  background: rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(30px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(180%) !important;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.3) !important;
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.1) inset !important;
+}
+
+[data-theme="ios"] .q-drawer--dark {
+  background: rgba(255, 255, 255, 0.4) !important;
+  backdrop-filter: blur(30px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(180%) !important;
+  border-right: 0.5px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+body[data-theme="ios"].body--dark {
+  color: #000000 !important;
+}
+
+[data-theme="ios"] *,
+[data-theme="ios"] h1,
+[data-theme="ios"] h2,
+[data-theme="ios"] h3,
+[data-theme="ios"] h4,
+[data-theme="ios"] h5,
+[data-theme="ios"] h6,
+[data-theme="ios"] p,
+[data-theme="ios"] span,
+[data-theme="ios"] div,
+[data-theme="ios"] label,
+[data-theme="ios"] .q-item-label,
+[data-theme="ios"] .text-body1,
+[data-theme="ios"] .text-body2 {
+  color: #000000 !important;
+  text-shadow: none !important;
+}
+
+[data-theme="ios"] .q-card,
+[data-theme="ios"] .q-dialog__inner > div,
+[data-theme="ios"] .q-btn,
+[data-theme="ios"] .q-field--dark .q-field__control {
+  box-shadow: none !important;
+}
+
+[data-theme="ios"] .q-field--dark .q-field__control {
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+[data-theme="ios"] .q-item {
+  background: rgba(255, 255, 255, 0.3) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border-radius: 12px !important;
+  margin: 4px 0 !important;
+}
+
+[data-theme="ios"] .q-item:hover {
+  background: rgba(255, 255, 255, 0.5) !important;
+}
+
+[data-theme="ios"] .q-menu {
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(30px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 16px !important;
+}
+
+// ============================================
+// WINDOWS 95 THEME - Classic beveled, gray
+// ============================================
+[data-theme="windows95"] {
+  font-family: "MS Sans Serif", "MS Sans Serif", sans-serif !important;
+  font-size: 11px !important;
+}
+
+[data-theme="windows95"] .q-card,
+[data-theme="windows95"] .q-dialog__inner > div {
+  border-radius: 0 !important;
+  border: 2px solid !important;
+  border-color: #FFFFFF #808080 #808080 #FFFFFF !important;
+  box-shadow: none !important;
+  background: #C0C0C0 !important;
+}
+
+[data-theme="windows95"] .q-btn {
+  border-radius: 0 !important;
+  border: 2px solid !important;
+  border-color: #FFFFFF #808080 #808080 #FFFFFF !important;
+  box-shadow: none !important;
+  background: #C0C0C0 !important;
+  color: #000000 !important;
+  font-weight: normal !important;
+  padding: 2px 12px !important;
+}
+
+[data-theme="windows95"] .q-btn:active {
+  border-color: #808080 #FFFFFF #FFFFFF #808080 !important;
+  box-shadow: none !important;
+}
+
+[data-theme="windows95"] .q-btn.bg-primary {
+  background: #000080 !important;
+  color: #FFFFFF !important;
+  border-color: #FFFFFF #000080 #000080 #FFFFFF !important;
+}
+
+[data-theme="windows95"] .q-header {
+  background: #C0C0C0 !important;
+  border-bottom: 2px solid !important;
+  border-color: #FFFFFF #808080 #808080 #FFFFFF !important;
+}
+
+[data-theme="windows95"] .q-drawer--dark {
+  background: #C0C0C0 !important;
+  border-right: 2px solid !important;
+  border-color: #FFFFFF #808080 #808080 #FFFFFF !important;
+}
+
+body[data-theme="windows95"].body--dark {
+  background: #C0C0C0 !important;
+  color: #000000 !important;
+}
+
+[data-theme="windows95"] *,
+[data-theme="windows95"] h1,
+[data-theme="windows95"] h2,
+[data-theme="windows95"] h3,
+[data-theme="windows95"] h4,
+[data-theme="windows95"] h5,
+[data-theme="windows95"] h6,
+[data-theme="windows95"] p,
+[data-theme="windows95"] span,
+[data-theme="windows95"] div,
+[data-theme="windows95"] label,
+[data-theme="windows95"] .q-item-label,
+[data-theme="windows95"] .text-body1,
+[data-theme="windows95"] .text-body2 {
+  color: #000000 !important;
+  text-shadow: none !important;
+}
+
+[data-theme="windows95"] .q-card,
+[data-theme="windows95"] .q-dialog__inner > div,
+[data-theme="windows95"] .q-btn,
+[data-theme="windows95"] .q-field--dark .q-field__control {
+  box-shadow: none !important;
+}
+
+[data-theme="windows95"] .q-field--dark .q-field__control {
+  border-radius: 0 !important;
+  border: 2px solid !important;
+  border-color: #808080 #FFFFFF #FFFFFF #808080 !important;
+  background: #FFFFFF !important;
+}
+
+// ============================================
+// MATRIX THEME - Green terminal, glitch effects
+// ============================================
+@keyframes matrixGlitch {
+  0%, 100% { text-shadow: 0 0 5px #00FF41, 0 0 10px #00FF41, 0 0 15px #00FF41; }
+  50% { text-shadow: 0 0 2px #00FF41, 0 0 5px #00FF41, 0 0 8px #00FF41, 0 0 12px #00FF41; }
+}
+
+@keyframes matrixScanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+[data-theme="matrix"] {
+  font-family: "Courier New", "Courier", monospace !important;
+  background: #000000 !important;
+  color: #00FF41 !important;
+  position: relative;
+}
+
+body[data-theme="matrix"]::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    transparent 50%,
+    rgba(0, 255, 65, 0.03) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 9999;
+  animation: matrixScanline 8s linear infinite;
+}
+
+[data-theme="matrix"] *,
+[data-theme="matrix"] h1,
+[data-theme="matrix"] h2,
+[data-theme="matrix"] h3,
+[data-theme="matrix"] h4,
+[data-theme="matrix"] h5,
+[data-theme="matrix"] h6,
+[data-theme="matrix"] p,
+[data-theme="matrix"] span,
+[data-theme="matrix"] div,
+[data-theme="matrix"] label,
+[data-theme="matrix"] .q-item-label,
+[data-theme="matrix"] .text-body1,
+[data-theme="matrix"] .text-body2,
+[data-theme="matrix"] .q-btn,
+[data-theme="matrix"] a {
+  color: #00FF41 !important;
+  text-shadow: 0 0 5px #00FF41, 0 0 10px #00FF41 !important;
+  animation: matrixGlitch 3s ease-in-out infinite !important;
+}
+
+[data-theme="matrix"] .q-card,
+[data-theme="matrix"] .q-dialog__inner > div {
+  border-radius: 0 !important;
+  border: 2px solid #00FF41 !important;
+  background: #000000 !important;
+  box-shadow: 0 0 20px rgba(0, 255, 65, 0.5), inset 0 0 20px rgba(0, 255, 65, 0.1) !important;
+}
+
+[data-theme="matrix"] .q-btn {
+  border-radius: 0 !important;
+  border: 2px solid #00FF41 !important;
+  background: #000000 !important;
+  color: #00FF41 !important;
+  font-family: "Courier New", monospace !important;
+  text-transform: uppercase !important;
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.5) !important;
+}
+
+[data-theme="matrix"] .q-btn:hover {
+  background: #00FF41 !important;
+  color: #000000 !important;
+  box-shadow: 0 0 20px rgba(0, 255, 65, 0.8) !important;
+}
+
+[data-theme="matrix"] .q-header {
+  background: #000000 !important;
+  border-bottom: 2px solid #00FF41 !important;
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.3) !important;
+}
+
+[data-theme="matrix"] .q-drawer--dark {
+  background: #000000 !important;
+  border-right: 2px solid #00FF41 !important;
+}
+
+body[data-theme="matrix"].body--dark {
+  background: #000000 !important;
+  color: #00FF41 !important;
+}
+
+[data-theme="matrix"] .q-field--dark .q-field__control {
+  border-radius: 0 !important;
+  border: 2px solid #00FF41 !important;
+  background: #000000 !important;
+  color: #00FF41 !important;
+  box-shadow: inset 0 0 10px rgba(0, 255, 65, 0.2) !important;
+}
+
+// ============================================
+// NEON THEME - Bright colors, glowing effects
+// ============================================
+@keyframes neonPulse {
+  0%, 100% { 
+    box-shadow: 0 0 5px currentColor, 0 0 10px currentColor, 0 0 15px currentColor;
+  }
+  50% { 
+    box-shadow: 0 0 10px currentColor, 0 0 20px currentColor, 0 0 30px currentColor, 0 0 40px currentColor;
+  }
+}
+
+[data-theme="neon"] {
+  font-family: "Arial Black", "Arial", sans-serif !important;
+  background: #0A0A0A !important;
+  color: #FF00FF !important;
+}
+
+[data-theme="neon"] .q-card,
+[data-theme="neon"] .q-dialog__inner > div {
+  border-radius: 12px !important;
+  border: 2px solid #FF00FF !important;
+  background: #1A1A2E !important;
+  box-shadow: 0 0 20px rgba(255, 0, 255, 0.5), inset 0 0 20px rgba(255, 0, 255, 0.1) !important;
+  animation: neonPulse 2s ease-in-out infinite !important;
+}
+
+[data-theme="neon"] .q-btn {
+  border-radius: 8px !important;
+  border: 2px solid #FF00FF !important;
+  background: transparent !important;
+  color: #FF00FF !important;
+  font-weight: bold !important;
+  text-transform: uppercase !important;
+  letter-spacing: 2px !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
+[data-theme="neon"] .q-btn.bg-primary,
+[data-theme="neon"] .q-page .q-btn.bg-primary,
+[data-theme="neon"] .q-btn.bg-primary *,
+[data-theme="neon"] .q-page .q-btn.bg-primary * {
+  background: #FF00FF !important;
+  color: #FFFFFF !important;
+  animation: none !important;
+  box-shadow: none !important;
+}
+
+[data-theme="neon"] .q-btn:hover {
+  box-shadow: none !important;
+  transform: scale(1.02) !important;
+}
+
+// ============================================
+// KAWAII THEME - Simple pastel background, minimal styling
+// ============================================
+[data-theme="kawaii"] {
+  font-family: "Nunito", "Poppins", "Arial Rounded MT Bold", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  background: linear-gradient(135deg, #ffeefb 0%, #e3f2ff 50%, #ffe6f7 100%) !important;
+  color: #ff6ec7 !important;
+}
+
+body[data-theme="kawaii"].body--dark {
+  background: linear-gradient(135deg, #ffeefb 0%, #e3f2ff 50%, #ffe6f7 100%) !important;
+  color: #ff6ec7 !important;
+}
+
+[data-theme="kawaii"] .q-card,
+[data-theme="kawaii"] .q-dialog__inner > div {
+  border-radius: 16px !important;
+  border: 1px solid rgba(255, 182, 193, 0.7) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  box-shadow: none !important;
+}
+
+[data-theme="kawaii"] .q-header {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-bottom: 1px solid rgba(255, 182, 193, 0.7) !important;
+  box-shadow: none !important;
+}
+
+[data-theme="kawaii"] .q-drawer--dark {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-right: 1px solid rgba(173, 216, 255, 0.8) !important;
+  box-shadow: none !important;
+}
+
+[data-theme="kawaii"] .q-btn {
+  border-radius: 999px !important;
+  border: 1px solid rgba(255, 182, 193, 0.8) !important;
+  background: #ffeefb !important;
+  color: #ff6ec7 !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+[data-theme="kawaii"] .q-btn.bg-primary {
+  background: #ff9ad5 !important;
+  color: #fff5fb !important;
+}
+
+[data-theme="kawaii"] .q-btn:hover {
+  transform: translateY(-1px) !important;
+}
+
+[data-theme="kawaii"] .q-field--dark .q-field__control {
+  border-radius: 14px !important;
+  border: 1px solid rgba(173, 216, 255, 0.8) !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #ff6ec7 !important;
+  box-shadow: none !important;
+}
+
+[data-theme="kawaii"] .q-item {
+  border-radius: 14px !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  margin: 4px 0 !important;
+}
+
+[data-theme="kawaii"] .q-item:hover {
+  background: rgba(255, 240, 250, 0.98) !important;
+}
+
+[data-theme="kawaii"] *,
+[data-theme="kawaii"] h1,
+[data-theme="kawaii"] h2,
+[data-theme="kawaii"] h3,
+[data-theme="kawaii"] h4,
+[data-theme="kawaii"] h5,
+[data-theme="kawaii"] h6,
+[data-theme="kawaii"] p,
+[data-theme="kawaii"] span,
+[data-theme="kawaii"] div,
+[data-theme="kawaii"] label,
+[data-theme="kawaii"] .q-item-label,
+[data-theme="kawaii"] .text-body1,
+[data-theme="kawaii"] .text-body2 {
+  color: #ff6ec7 !important;
+  text-shadow: none !important;
+}
+
+[data-theme="neon"] .q-header {
+  background: #0A0A0A !important;
+  border-bottom: 2px solid #FF00FF !important;
+  box-shadow: 0 0 15px rgba(255, 0, 255, 0.4) !important;
+}
+
+[data-theme="neon"] .q-drawer--dark {
+  background: #0A0A0A !important;
+  border-right: 2px solid #FF00FF !important;
+  box-shadow: 0 0 15px rgba(255, 0, 255, 0.3) !important;
+}
+
+body[data-theme="neon"].body--dark {
+  background: #0A0A0A !important;
+  color: #FF00FF !important;
+}
+
+[data-theme="neon"] .q-field--dark .q-field__control {
+  border-radius: 8px !important;
+  border: 2px solid #FF00FF !important;
+  background: #1A1A2E !important;
+  color: #FF00FF !important;
+  box-shadow: 0 0 10px rgba(255, 0, 255, 0.3) !important;
+}
+
+// ============================================

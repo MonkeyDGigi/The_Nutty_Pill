@@ -1,0 +1,856 @@
+// app global css in SCSS form
+
+// Minimalistic smooth design
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+  background: #1A0D2E !important; /* Dark Purple */
+  color: #9D4EDD !important; /* Light Purple */
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+// Ensure theme is applied even if localStorage fails (private mode)
+body:not([data-theme]) {
+  background: #1A0D2E !important; /* Dark Purple */
+  color: #9D4EDD !important; /* Light Purple */
+}
+
+body[data-theme="retro"],
+body:not([data-theme]) {
+  background: #1A0D2E !important; /* Dark Purple */
+  color: #9D4EDD !important; /* Light Purple */
+}
+
+// prevent pull to refresh
+html,
+body {
+  overscroll-behavior: none;
+  background: #1A0D2E !important; /* Dark Purple */
+}
+
+// Minimalistic Card styling - smooth, thin borders, rounded corners
+.q-card {
+  background: #4A148C !important; /* Medium Purple */
+  border: 1px solid rgba(157, 78, 221, 0.3) !important; /* Thin purple border */
+  border-radius: 12px !important; /* Rounded corners */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important; /* Subtle shadow */
+  transition: all 0.2s ease !important;
+}
+
+.q-card:hover {
+  box-shadow: 0 4px 12px rgba(157, 78, 221, 0.3) !important;
+}
+
+// Minimalistic Dialog styling
+.q-dialog__inner > div {
+  background: #4A148C !important; /* Medium Purple */
+  border: 1px solid rgba(157, 78, 221, 0.3) !important; /* Thin border */
+  border-radius: 16px !important; /* Rounded corners */
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important; /* Soft shadow */
+}
+
+// Map CSS env() safe area to our custom variable for PWA iOS
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top);
+}
+
+// margin for top elements for ios safe area
+body,
+.q-drawer,
+.q-header,
+.q-dialog__inner > div {
+  margin-top: var(--safe-area-inset-top);
+}
+
+.q-dialog__inner > div {
+  border-radius: 16px !important; /* Rounded corners */
+}
+
+.q-card {
+  border-radius: 12px !important; /* Rounded corners */
+}
+
+.q-dialog__inner--minimized > div {
+  border-radius: 12px !important; /* Rounded corners */
+  max-width: 650px;
+  border: 4px solid #000000 !important;
+}
+
+// Custom buttons - transparent by default, purple on hover
+.custom-btn {
+  background: transparent !important; // Transparent by default
+  background-color: transparent !important;
+  background-image: none !important; // No background patterns
+  color: #9D4EDD !important; // Purple text
+  border-radius: 0 !important; // No rounded corners
+  height: 80px;
+  box-shadow: none !important; // No shadow
+  font-family: "Press Start 2P", monospace !important;
+  font-size: 10px !important;
+  font-weight: normal !important;
+  border: none !important; // No border
+  text-transform: uppercase !important;
+  letter-spacing: 0 !important;
+  transition: none !important; // No smooth transitions
+  image-rendering: auto !important; // Smooth rendering
+  -webkit-font-smoothing: antialiased !important; // Smooth text
+  -moz-osx-font-smoothing: grayscale !important; // Smooth text
+  text-rendering: optimizeLegibility !important; // Clean text
+  text-shadow: none !important; // No text shadow
+  position: relative;
+  outline: none !important;
+}
+
+.custom-btn:hover {
+  background: #9D4EDD !important; // Purple background on hover
+  background-color: #9D4EDD !important;
+  background-image: none !important; // No background patterns
+  color: #FFFFFF !important; // White text on hover
+  text-shadow: none !important; // No text shadow
+  box-shadow: none !important;
+  transform: none !important;
+  border: none !important;
+  image-rendering: auto !important; // Smooth rendering
+  -webkit-font-smoothing: antialiased !important; // Smooth text
+  -moz-osx-font-smoothing: grayscale !important; // Smooth text
+  text-rendering: optimizeLegibility !important; // Clean text
+}
+
+.custom-btn:active {
+  background: #7B2CBF !important; // Slightly darker purple when pressed
+  background-color: #7B2CBF !important;
+  color: #000000 !important;
+  text-shadow: none !important; // No text shadow
+  box-shadow: none !important;
+  transform: none !important;
+  border: none !important;
+}
+
+.custom-btn-text {
+  font-family: "Press Start 2P", monospace !important;
+  font-size: 10px !important;
+  color: #9D4EDD !important; // Purple text by default
+  padding-top: 2px;
+  font-weight: normal !important;
+  text-shadow: none !important; // No text shadow
+}
+
+.custom-btn:hover .custom-btn-text {
+  color: #FFFFFF !important; // White text on hover
+  text-shadow: none !important; // No text shadow
+}
+
+.full-width-card {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.animated.tada {
+  animation-duration: 1s;
+}
+.animated.bounceIn {
+  animation-duration: 1s;
+}
+.animated.bounce {
+  animation-duration: 1s;
+}
+
+.q-checkbox__svg {
+  color: var(--q-dark);
+}
+
+// Minimalistic Input fields - smooth, thin borders
+.q-field--dark .q-field__control {
+  color: #9D4EDD !important;
+  border: 1px solid rgba(157, 78, 221, 0.3) !important;
+  border-radius: 8px !important;
+  background: #4A148C !important;
+  transition: all 0.2s ease !important;
+}
+
+.q-field--dark .q-field__control:hover {
+  border-color: rgba(157, 78, 221, 0.5) !important;
+}
+
+.q-field--dark .q-field__native {
+  color: #9D4EDD !important;
+  font-size: 14px !important;
+}
+
+.q-field--dark .q-field__label {
+  color: rgba(157, 78, 221, 0.7) !important;
+  font-size: 12px !important;
+}
+
+// Minimalistic Headers and navigation
+.q-header {
+  background: #1A0D2E !important; /* Dark Purple */
+  border-bottom: 1px solid rgba(157, 78, 221, 0.2) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.q-drawer--dark {
+  background: #1A0D2E !important; /* Dark Purple */
+  border-right: 1px solid rgba(157, 78, 221, 0.2) !important;
+}
+
+// Minimalistic Links
+a {
+  color: #9D4EDD !important;
+  text-decoration: none;
+  transition: color 0.2s ease !important;
+}
+
+a:hover {
+  color: #B794F6 !important; /* Lighter purple */
+}
+
+// Minimalistic Badges and chips
+.q-badge {
+  border: 1px solid rgba(157, 78, 221, 0.3) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+  font-size: 11px !important;
+  padding: 2px 8px !important;
+}
+
+// Minimalistic Table styling
+.q-table--dark {
+  background: transparent !important;
+  color: #9D4EDD !important;
+  font-size: 13px !important;
+  border: 1px solid rgba(157, 78, 221, 0.2) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+}
+
+.q-table--dark thead th {
+  background: rgba(74, 20, 140, 0.5) !important;
+  border-bottom: 1px solid rgba(157, 78, 221, 0.2) !important;
+  color: #9D4EDD !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+.q-table--dark tbody td {
+  border-bottom: 1px solid rgba(157, 78, 221, 0.1) !important;
+  color: #9D4EDD !important;
+}
+
+// ALL BUTTONS - Minimalistic styling: transparent by default, purple on hover
+.q-btn,
+.q-btn.bg-primary,
+.q-btn.bg-secondary,
+.q-btn.bg-accent,
+.q-btn.bg-white,
+.q-btn.bg-grey-1,
+.q-btn.bg-grey-2,
+.q-btn.bg-grey-3,
+.q-btn.bg-dark,
+.q-btn.bg-positive,
+.q-btn.bg-negative,
+.q-btn.bg-info,
+.q-btn.bg-warning,
+.q-btn--outline,
+.q-btn--flat,
+.q-btn.rounded,
+.q-btn[color="primary"],
+.q-btn[color="secondary"],
+.q-btn.color-primary,
+.q-btn.color-secondary {
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  border: 1px solid rgba(157, 78, 221, 0.3) !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
+  transition: all 0.2s ease !important;
+  outline: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #9D4EDD !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+// Ensure button text is smooth and clean
+.q-btn *,
+.q-btn span,
+.q-btn .q-btn__content,
+.q-btn .q-btn__wrapper,
+.q-btn .button-content {
+  image-rendering: auto !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
+}
+
+// Remove any highlight/glow effects from button pseudo-elements
+.q-btn::before,
+.q-btn::after,
+.q-btn *::before,
+.q-btn *::after {
+  display: none !important;
+  content: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+  background: none !important;
+}
+
+// ALL BUTTONS ON HOVER - Purple background with white text
+.q-btn:hover,
+.q-btn.bg-primary:hover,
+.q-btn.bg-secondary:hover,
+.q-btn.bg-accent:hover,
+.q-btn.bg-white:hover,
+.q-btn.bg-grey-1:hover,
+.q-btn.bg-grey-2:hover,
+.q-btn.bg-grey-3:hover,
+.q-btn.bg-dark:hover,
+.q-btn.bg-positive:hover,
+.q-btn.bg-negative:hover,
+.q-btn.bg-info:hover,
+.q-btn.bg-warning:hover,
+.q-btn--outline:hover,
+.q-btn--flat:hover,
+.q-btn.rounded:hover,
+.q-btn[color="primary"]:hover,
+.q-btn[color="secondary"]:hover,
+.q-btn.color-primary:hover,
+.q-btn.color-secondary:hover {
+  background: #9D4EDD !important; /* Purple background on hover */
+  background-color: #9D4EDD !important;
+  background-image: none !important;
+  color: #FFFFFF !important; /* White text on hover */
+  text-shadow: none !important;
+  border-color: #9D4EDD !important;
+  box-shadow: 0 2px 8px rgba(157, 78, 221, 0.3) !important;
+  transform: translateY(-1px) !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  image-rendering: auto !important; // Smooth rendering
+  -webkit-font-smoothing: antialiased !important; // Smooth text
+  -moz-osx-font-smoothing: grayscale !important; // Smooth text
+  text-rendering: optimizeLegibility !important; // Clean text
+}
+
+// Ensure hover text is smooth and white
+.q-btn:hover *,
+.q-btn:hover span,
+.q-btn:hover .q-btn__content,
+.q-btn:hover .q-btn__wrapper,
+.q-btn:hover .button-content {
+  image-rendering: auto !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
+  color: #FFFFFF !important; // White text on hover
+}
+
+// Remove highlight effects from button hover pseudo-elements
+.q-btn:hover::before,
+.q-btn:hover::after,
+.q-btn:hover *::before,
+.q-btn:hover *::after {
+  display: none !important;
+  content: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+  background: none !important;
+}
+
+// Override any button with any background class
+.q-btn[class*="bg-"] {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #9D4EDD !important;
+  text-shadow: none !important;
+}
+
+.q-btn[class*="bg-"]:hover {
+  background: #9D4EDD !important;
+  background-color: #9D4EDD !important;
+  color: #FFFFFF !important; // White text on hover
+  text-shadow: none !important;
+}
+
+// Ensure all button text and child elements are white on hover
+.q-btn:hover,
+.q-btn:hover *,
+.q-btn:hover span,
+.q-btn:hover .q-btn__content,
+.q-btn:hover .q-icon,
+button:hover,
+button:hover *,
+button:hover span,
+.btn:hover,
+.btn:hover *,
+.btn:hover span {
+  color: #FFFFFF !important; // White text on hover
+}
+
+// Button content and icons - white on hover
+.q-btn:hover .q-btn__content,
+.q-btn:hover .q-btn__wrapper,
+.q-btn:hover .button-content,
+.q-btn:hover .q-icon {
+  color: #FFFFFF !important; // White on hover
+}
+
+// Ensure disabled buttons stay transparent (don't get purple on hover)
+.q-btn--disabled,
+.q-btn--disabled:hover,
+.q-btn[disabled],
+.q-btn[disabled]:hover,
+button[disabled],
+button[disabled]:hover {
+  background: transparent !important;
+  background-color: transparent !important;
+  opacity: 0.5 !important;
+  color: #9D4EDD !important;
+}
+
+// GBA Text styling
+h1, h2, h3, h4, h5, h6, p, span, div, label {
+  font-family: "Press Start 2P", monospace !important;
+  color: #9D4EDD !important;
+  text-shadow: 2px 2px 0px #000000;
+}
+
+// GBA Icons - make them pixelated if possible
+.q-icon {
+  image-rendering: pixelated;
+  filter: none !important; // Remove filter effects
+}
+
+// Remove filter effects from icons in buttons
+.q-btn .q-icon,
+button .q-icon {
+  filter: none !important;
+}
+
+// GBA List items
+.q-item {
+  border-bottom: 1px solid #000000 !important;
+  font-family: "Press Start 2P", monospace !important;
+  font-size: 8px !important;
+  color: #9D4EDD !important;
+  text-shadow: 1px 1px 0px #000000;
+}
+
+.q-item:hover {
+  background: #4A148C !important;
+}
+
+// GBA Tabs
+.q-tabs {
+  border-bottom: 3px solid #000000 !important;
+  background: #1A0D2E !important;
+}
+
+.q-tab {
+  font-family: "Press Start 2P", monospace !important;
+  font-size: 8px !important;
+  color: #9D4EDD !important;
+  text-shadow: 1px 1px 0px #000000;
+  border-bottom: 3px solid transparent !important;
+}
+
+.q-tab--active {
+  color: #F87800 !important; // GBA Orange
+  border-bottom: none !important;
+}
+
+// GBA Chips
+.q-chip {
+  border-radius: 0 !important;
+  border: 2px solid #000000 !important;
+  background: #4A148C !important;
+  color: #9D4EDD !important;
+  font-family: "Press Start 2P", monospace !important;
+  font-size: 8px !important;
+  box-shadow: 2px 2px 0px #000000;
+  image-rendering: pixelated;
+}
+
+// GBA Tooltips
+.q-tooltip {
+  background: #4A148C !important;
+  color: #9D4EDD !important;
+  border: 2px solid #000000 !important;
+  border-radius: 0 !important;
+  font-family: "Press Start 2P", monospace !important;
+  font-size: 8px !important;
+  box-shadow: 3px 3px 0px #000000;
+  image-rendering: pixelated;
+}
+
+// GBA Menus
+.q-menu {
+  background: #4A148C !important;
+  border: 3px solid #000000 !important;
+  border-radius: 0 !important;
+  box-shadow: 4px 4px 0px #000000;
+  image-rendering: pixelated;
+}
+
+.q-menu .q-item {
+  color: #9D4EDD !important;
+  font-family: "Press Start 2P", monospace !important;
+  font-size: 8px !important;
+}
+
+// GBA Scrollbars (if visible)
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1A0D2E;
+  border: 2px solid #000000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #9D4EDD;
+  border: 2px solid #000000;
+  image-rendering: pixelated;
+}
+
+// GBA Selection
+::selection {
+  background: #9D4EDD;
+  color: #000000;
+}
+
+// GBA Focus states - Remove orange outlines
+*:focus {
+  outline: none !important; // No outline
+  outline-offset: 0 !important;
+}
+
+// Remove all orange outlines
+* {
+  outline-color: transparent !important;
+}
+
+// Buttons should never have orange outlines
+.q-btn:focus,
+button:focus,
+[role="button"]:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+// ALL HTML BUTTONS - transparent by default, purple on hover with black text
+button,
+button:not(.q-btn):not(.custom-btn),
+.btn,
+.btn:not(.q-btn):not(.custom-btn),
+[role="button"],
+[role="button"]:not(.q-btn):not(.custom-btn),
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  border: none !important;
+  outline: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #9D4EDD !important; // Purple text
+  text-shadow: none !important; // No text shadow
+  font-family: "Press Start 2P", monospace !important;
+}
+
+button:hover,
+button:not(.q-btn):not(.custom-btn):hover,
+.btn:hover,
+.btn:not(.q-btn):not(.custom-btn):hover,
+[role="button"]:hover,
+[role="button"]:not(.q-btn):not(.custom-btn):hover,
+input[type="button"]:hover,
+input[type="submit"]:hover,
+input[type="reset"]:hover {
+  background: #9D4EDD !important; // Purple background on hover
+  background-color: #9D4EDD !important;
+  color: #FFFFFF !important; // White text on hover
+  text-shadow: none !important; // No text shadow
+  border: none !important;
+}
+
+// Input fields and form elements - no orange outlines
+input:not(.q-field__native),
+textarea:not(.q-field__native),
+select:not(.q-field__native) {
+  border-color: #000000 !important; // Black border
+  outline: none !important; // No outline
+}
+
+// Div blocks with white borders - replace with Bitcoin Orange
+div[style*="border"]:not(.q-card):not(.q-dialog__inner > div):not(.q-header):not(.q-drawer--dark) {
+  border-color: #F7931A !important; // Bitcoin Orange
+}
+
+// Quasar outline buttons - Bitcoin Orange, no border
+.q-btn--outline:not(.bg-primary) {
+  border: none !important; // Remove border
+  border-color: transparent !important;
+  color: #F7931A !important; // Bitcoin Orange text
+  background: transparent !important;
+}
+
+.q-btn--outline:hover {
+  border: none !important; // Remove border on hover
+  background: rgba(247, 147, 26, 0.1) !important; // Light orange background on hover
+}
+
+// Flat buttons (like scan button) - no border
+.q-btn--flat {
+  border: none !important;
+  outline: none !important;
+}
+
+// White buttons - make them Bitcoin Orange
+.q-btn.bg-white,
+button.bg-white,
+.q-btn.bg-grey-1,
+.q-btn.bg-grey-2,
+.q-btn.bg-grey-3 {
+  background: #F7931A !important; // Bitcoin Orange
+  color: #000000 !important;
+  border: none !important;
+}
+
+// Buttons with inline white background styles
+.q-btn[style*="background: white"],
+.q-btn[style*="background: #fff"],
+.q-btn[style*="background: #ffffff"],
+.q-btn[style*="background-color: white"],
+.q-btn[style*="background-color: #fff"],
+button[style*="background: white"],
+button[style*="background: #fff"] {
+  background: #F7931A !important; // Bitcoin Orange
+  color: #000000 !important;
+  border: none !important;
+}
+
+// Keep flat and outline buttons transparent (no background)
+.q-btn--flat:not(.bg-primary):not(.bg-white),
+.q-btn--outline {
+  background: transparent !important;
+  color: #F7931A !important; // Bitcoin Orange text
+}
+
+// Remove borders from scan button container
+.scan-button-container .q-btn,
+.scan-button-container button {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+// Remove borders from header buttons (burger menu and refresh)
+.q-header .q-btn,
+.q-toolbar .q-btn,
+.q-btn[aria-label="Menu"],
+.q-btn[aria-label="Refresh"] {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.q-btn--round {
+  border: none !important;
+  outline: none !important;
+}
+
+// Send/Receive buttons - transparent by default, purple on hover
+.wallet-action-btn,
+.wallet-action-btn.q-btn,
+.wallet-action-btn.q-btn.bg-primary,
+.wallet-action-btn.q-btn[class*="bg-"] {
+  background: transparent !important; // No background by default
+  background-color: transparent !important; // No background by default
+  color: #9D4EDD !important; // Purple text
+  border: none !important;
+}
+
+.wallet-action-btn:hover,
+.wallet-action-btn.q-btn:hover,
+.wallet-action-btn.q-btn.bg-primary:hover {
+  background: #9D4EDD !important; // Purple background on hover
+  background-color: #9D4EDD !important; // Purple background on hover
+  color: #000000 !important; // Black text on hover
+  border: none !important;
+}
+
+// MintSettings page buttons - transparent by default, purple on hover
+.q-page .q-btn,
+.q-page .q-btn.bg-primary,
+.q-page .q-btn.color-primary,
+.q-page .q-btn[color="primary"],
+.q-page .q-btn.rounded,
+.q-page .q-btn.flat {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #9D4EDD !important; // Purple text
+  border: none !important;
+  text-shadow: 2px 2px 0px #000000;
+}
+
+.q-page .q-btn:hover,
+.q-page .q-btn.bg-primary:hover,
+.q-page .q-btn.color-primary:hover,
+.q-page .q-btn[color="primary"]:hover,
+.q-page .q-btn.rounded:hover,
+.q-page .q-btn.flat:hover {
+  background: #9D4EDD !important; // Purple background on hover
+  background-color: #9D4EDD !important;
+  color: #000000 !important; // Black text on hover
+  text-shadow: 3px 3px 0px #000000, 0px 0px 8px rgba(0, 0, 0, 0.8) !important; // Bigger shadow for readability
+  border: none !important;
+}
+
+// Override text-white class on buttons
+.q-btn.text-white,
+.q-btn[class*="text-white"],
+.q-btn.flat.text-white {
+  color: #9D4EDD !important; // Purple text instead of white
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  text-shadow: 2px 2px 0px #000000;
+}
+
+.q-btn.text-white:hover,
+.q-btn[class*="text-white"]:hover,
+.q-btn.flat.text-white:hover {
+  color: #FFFFFF !important; // White text on hover
+  background: #9D4EDD !important; // Purple background on hover
+  background-color: #9D4EDD !important;
+  text-shadow: none !important; // No text shadow
+  border: none !important;
+}
+
+// Rounded buttons - transparent by default, purple on hover
+.q-btn.rounded {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #9D4EDD !important; // Purple text
+  border: none !important;
+  text-shadow: 2px 2px 0px #000000;
+}
+
+.q-btn.rounded:hover {
+  background: #9D4EDD !important; // Purple background on hover
+  background-color: #9D4EDD !important;
+  color: #FFFFFF !important; // White text on hover
+  text-shadow: none !important; // No text shadow
+  border: none !important;
+}
+
+// Buttons with color="primary" attribute
+.q-btn[color="primary"],
+.q-btn.color-primary {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #9D4EDD !important; // Purple text
+  border: none !important;
+  text-shadow: 2px 2px 0px #000000;
+}
+
+.q-btn[color="primary"]:hover,
+.q-btn.color-primary:hover {
+  background: #9D4EDD !important; // Purple background on hover
+  background-color: #9D4EDD !important;
+  color: #FFFFFF !important; // White text on hover
+  text-shadow: none !important; // No text shadow
+  border: none !important;
+}
+
+// Override any Quasar default button backgrounds for wallet action buttons
+.wallet-action-btn::before,
+.wallet-action-btn::after {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+// Force transparent background on wallet action buttons - override all Quasar styles
+.q-btn.wallet-action-btn.bg-primary,
+.q-btn.wallet-action-btn.color-primary {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+// Remove any white/grey backgrounds that might be applied
+.q-btn.wallet-action-btn.bg-white,
+.q-btn.wallet-action-btn.bg-grey-1,
+.q-btn.wallet-action-btn.bg-grey-2,
+.q-btn.wallet-action-btn.bg-grey-3 {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #9D4EDD !important;
+}
+
+// Remove borders from BalanceView/ActivityOrb area
+.q-carousel,
+.q-carousel-slide,
+.ToggleUnit,
+ActivityOrb,
+BalanceView,
+.q-pt-xl,
+.q-pb-md {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+// Remove borders from balance display container
+div[class*="q-pt-xl"],
+div[class*="q-pb-md"],
+div[class*="row justify-center"] {
+  border: none !important;
+  outline: none !important;
+}
+
+// Any element with white border color
+[style*="border-color: white"],
+[style*="border-color: #fff"],
+[style*="border-color: #ffffff"],
+[style*="border-color: rgb(255, 255, 255)"] {
+  border-color: #F7931A !important; // Bitcoin Orange
+}
+
+// GBA Disabled states
+.q-btn--disabled,
+.q-field--disabled {
+  opacity: 0.5;
+  filter: grayscale(50%);
+}
+
+// Remove smooth transitions for pixelated feel (except buttons)
+*:not(.q-btn) {
+  transition: none !important;
+}
+
+// Allow only transform for button press effect with step timing
+.q-btn {
+  transition: transform 0.05s step-end !important;
+}
+
+// GBA Loading spinners
+.q-spinner {
+  image-rendering: pixelated;
+  filter: contrast(1.2);
+}

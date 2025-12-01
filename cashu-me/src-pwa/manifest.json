@@ -3,6 +3,7 @@
   "short_name": "Nutty Pill",
   "description": "Learn Bitcoin and unlock sats!",
   "display": "standalone",
+  "display_override": ["standalone", "fullscreen", "minimal-ui"],
   "start_url": "/",
   "scope": "/",
   "orientation": "portrait",

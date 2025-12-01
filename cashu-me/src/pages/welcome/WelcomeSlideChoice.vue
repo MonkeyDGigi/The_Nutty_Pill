@@ -60,6 +60,7 @@ export default {
     const choose = (path: "new" | "recover") => {
       welcomeStore.setPath(path);
       // advance to next stage immediately for snappier UX
+      // The parent WelcomePage will handle the route navigation
       welcomeStore.setCurrentSlide(4);
     };
     return { welcomeStore, walletStore, choose };

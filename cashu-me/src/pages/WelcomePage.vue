@@ -132,31 +132,45 @@ export default {
     
     // Sync route param with local state and store
     watch(() => route.params.step, (newStep) => {
+      // Don't sync if we're navigating away from welcome
+      if (!route.path.startsWith('/welcome')) return;
+      
       const stepStr = Array.isArray(newStep) ? newStep[0] : newStep;
       const step = parseInt(stepStr || '0') || 0;
-      if (step !== currentSlide.value) {
+      if (step !== currentSlide.value && welcomeStore.showWelcome) {
         currentSlide.value = step;
         welcomeStore.setCurrentSlide(step);
       }
     }, { immediate: true });
     
     // Sync store changes to route (when other components update the store)
+    // But only if we're still on a welcome route and welcome is still active
     watch(() => welcomeStore.currentSlide, (newSlide) => {
-      if (newSlide !== currentSlide.value) {
+      if (route.path.startsWith('/welcome') && welcomeStore.showWelcome && newSlide !== currentSlide.value) {
         currentSlide.value = newSlide;
         const step = newSlide.toString();
-        if (route.params.step !== step) {
-          router.push({ name: step === '0' ? 'welcome' : 'welcome-step', params: { step } });
+        const currentStep = Array.isArray(route.params.step) ? route.params.step[0] : route.params.step;
+        if (currentStep !== step) {
+          // Use replace for internal navigation to avoid browser UI appearing
+          router.replace({ name: step === '0' ? 'welcome' : 'welcome-step', params: { step } }).catch(() => {
+            // Ignore navigation errors
+          });
         }
       }
     });
     
     // Sync local slide changes to route
     watch(currentSlide, (newSlide) => {
+      // Don't update route if we're completing the welcome (navigating away)
+      if (welcomeStore.showWelcome === false) return;
+      
       const step = newSlide.toString();
       const currentStep = Array.isArray(route.params.step) ? route.params.step[0] : route.params.step;
       if (currentStep !== step) {
-        router.push({ name: step === '0' ? 'welcome' : 'welcome-step', params: { step } });
+        // Use replace for internal navigation to avoid browser UI issues
+        router.replace({ name: step === '0' ? 'welcome' : 'welcome-step', params: { step } }).catch(() => {
+          // Ignore navigation errors
+        });
       }
       welcomeStore.setCurrentSlide(newSlide);
     });
@@ -190,13 +204,24 @@ export default {
     };
     
     const goToNextSlide = () => {
-      if (canProceed.value) {
-        if (isLastSlide.value) {
-          welcomeStore.closeWelcome();
-          router.push('/');
-        } else {
-          currentSlide.value += 1;
-        }
+      if (!canProceed.value) return;
+      
+      if (isLastSlide.value) {
+        // Complete welcome flow - mark as complete first
+        welcomeStore.showWelcome = false;
+        // Don't reset currentSlide here to avoid triggering route updates
+        // Navigate to home page using replace to avoid back button issues
+        router.replace('/').then(() => {
+          // Reset slide state after navigation completes
+          welcomeStore.currentSlide = 0;
+        }).catch(() => {
+          // If navigation fails, force reload
+          window.location.href = '/';
+        });
+      } else {
+        // Move to next slide
+        const nextSlide = currentSlide.value + 1;
+        currentSlide.value = nextSlide;
       }
     };
     
@@ -226,8 +251,14 @@ export default {
     });
     
     const isLastSlide = computed(() => {
-      if (welcomeStore.onboardingPath === "recover") return currentSlide.value === 6;
-      if (welcomeStore.onboardingPath === "new") return currentSlide.value === 5;
+      // Check if we're on the last slide based on the onboarding path
+      if (welcomeStore.onboardingPath === "recover") {
+        return currentSlide.value === 6;
+      }
+      if (welcomeStore.onboardingPath === "new") {
+        return currentSlide.value === 5;
+      }
+      // If no path selected yet, we're not on last slide
       return false;
     });
 

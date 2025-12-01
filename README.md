@@ -1,102 +1,222 @@
-# Cashu Arcade
+# The Nutty Pill
 
-A minimalist React web app for Cashu wallet management with a gaming focus.
+An orange pilling project based on the Cashu.me wallet. Help your friends and family learn about Bitcoin while earning sats!
 
-## Features
+## About
 
-- **🎮 Games Hub**: Browse placeholder games (Stake Duel, Arcade Challenge, Tournaments)
-- **💼 Wallet**: Basic Cashu wallet with send/receive functionality
-- **👥 Friends**: Manage friends and send challenges with privacy controls
-- **⚙️ Profile**: User settings with username, mint URL, and privacy toggle
+The Nutty Pill is an educational application that gamifies Bitcoin learning. Users complete lessons about Bitcoin and unlock sats (satoshis) as rewards. It's designed for orange pillers who want to help their friends and family learn about Bitcoin in an engaging way.
 
-## Tech Stack
+### Key Features
 
-- **React 18** with Vite
-- **JavaScript** (no TypeScript)
-- **React Router** for navigation
-- **@cashu/cashu-ts** for wallet operations (currently stubbed)
-- **CSS Modules/Global CSS** with dark theme
+- **Bitcoin Education**: 84 lessons across 4 topics:
+  - 📜 Bitcoin History (21 lessons) - From the whitepaper to today
+  - ⚙️ The Tech (21 lessons) - How Bitcoin works under the hood
+  - 💰 21M/∞ (21 lessons) - Hard money vs infinite fiat
+  - 🔐 Stay Sovereign (21 lessons) - Hold your own keys, stay in control
+
+- **Reward System**: Lock sats in a reward pool that learners unlock by completing lessons with 100% scores
+- **Progress Tracking**: Track lesson completion and unlocked sats locally on the device
+- **Multiple Themes**: Customizable visual themes including Neon Cyberpunk (default), Kawaii, and more
+- **PWA Support**: Install as a Progressive Web App for native-like experience
+- **Based on Cashu**: Built on the Cashu.me ecash wallet infrastructure
+
+## Credits
+
+This project is based on [cashu.me](https://github.com/cashubtc/cashu.me).  
+Huge thanks to the original authors for their work.
+
+This project is a fork/derivative of cashu.me. The original project uses the MIT license (see LICENSE.md).
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v16 or higher)
+- npm or yarn
+
+### Installation
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd The_Nutty_Pill/cashu-me
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+### Development
+
+Start the development server:
+```bash
+npm run dev
+```
+
+The app will be available at `http://localhost:8080`
+
+### Building for Production
+
+Build as a Progressive Web App:
+```bash
+npm run build
+# or
+npm run build:pwa
+```
+
+The built files will be in `cashu-me/dist/spa/`
+
+## How to Use
+
+### For Orange Pillers (Setup)
+
+1. **Install on Learner's Device**: Set up The Nutty Pill on your friend's or family member's device
+2. **Create Wallet**: During onboarding, a wallet will be created
+3. **Secure the Seed Phrase**: **Important** - Save the wallet's seed phrase securely. This allows you to access the wallet on cashu.me if needed to unlock sats or recover funds if something goes wrong
+4. **Add Sats**: Receive sats to the wallet from a Cashu mint
+5. **Set Reward Pool**: Go to Settings to set the total reward pool. All sats are locked by default and can only be unlocked by completing lessons
+6. **Let Them Learn**: Progress is saved locally on their device. Learners complete lessons and unlock sats as they progress!
+
+### For Learners
+
+1. **Complete Lessons**: Navigate through the 4 topics and complete lessons
+2. **Answer Questions**: Each lesson includes questions to test understanding
+3. **Unlock Sats**: Earn sats by completing lessons with 100% scores
+4. **Track Progress**: See your progress for each topic (x/21 lessons completed)
 
 ## Project Structure
 
 ```
-src/
-├── main.jsx              # React entry point
-├── App.jsx               # Main app with routing
-├── index.css             # Global styles
-├── components/
-│   └── SetupScreen.jsx   # First-time setup
-├── pages/
-│   ├── GamesPage.jsx     # Games hub
-│   ├── WalletPage.jsx    # Wallet interface
-│   ├── FriendsPage.jsx   # Friends management
-│   └── ProfilePage.jsx   # User settings
-└── utils/
-    └── wallet.js         # Cashu wallet utilities
+The_Nutty_Pill/
+├── cashu-me/              # Main application directory
+│   ├── src/
+│   │   ├── pages/           # Main application pages
+│   │   │   ├── HomePage.vue      # Main education interface
+│   │   │   ├── WalletPage.vue    # Wallet interface
+│   │   │   ├── Settings.vue      # App settings
+│   │   │   └── MintsPage.vue     # Mint management
+│   │   ├── stores/          # Pinia state management
+│   │   │   ├── education.ts      # Lesson progress and rewards
+│   │   │   └── bitcoin-lessons.ts  # Lesson content
+│   │   ├── components/      # Reusable Vue components
+│   │   └── css/            # Styles and themes
+│   ├── public/             # Static assets
+│   │   └── icons/          # PWA icons
+│   └── quasar.config.js    # Quasar framework configuration
+└── README.md              # This file
 ```
 
-## Getting Started
+## Development Commands
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
+Navigate to the `cashu-me` directory first:
 
-2. Start development server:
-   ```bash
-   npm run dev
-   ```
+```bash
+cd cashu-me
+```
 
-3. Open [http://localhost:5173](http://localhost:5173) in your browser
+### Lint the files
+```bash
+npm run lint
+```
 
-## User Flow
+### Format the files
+```bash
+npm run format
+```
 
-### First Visit
-- Setup screen prompts for username, Cashu mint URL, and privacy preference
-- Data saved to localStorage
+### Check translations
+```bash
+npm run i18n:check
+```
 
-### Main App
-- **Games**: View placeholder games (coming soon)
-- **Wallet**: Check balance, send/receive sats (currently mocked)
-- **Friends**: Add friends, view players based on privacy setting
-- **Profile**: Update settings
+### Run tests
+```bash
+npm test
+```
 
-## Privacy Modes
+## Deployment
 
-- **Public**: Profile visible to all, can receive challenges from anyone
-- **Private**: Only friends can see profile and send challenges
+### Netlify
 
-## Wallet Integration
+The project is configured for Netlify deployment. The `netlify.toml` file specifies:
+- Base directory: `cashu-me`
+- Build command: `npm install && npm run build`
+- Publish directory: `cashu-me/dist/spa`
 
-The wallet module (`src/utils/wallet.js`) provides stubs for:
-- `initWallet(mintUrl)` - Initialize with Cashu mint
-- `getBalance()` - Get current sat balance
-- `receive(amount)` - Generate receive token
-- `send(amount, destination)` - Send sats
+### Docker
 
-Currently uses mock data. Replace with real @cashu/cashu-ts calls for production.
+```bash
+cd cashu-me
+docker-compose up -d
+```
 
-## Data Storage
+Access at `http://localhost:3000` or serve it behind a reverse proxy.
 
-All user data stored in localStorage:
-- `username` - User's display name
-- `mintUrl` - Cashu mint URL
-- `privacy` - "public" or "private"
-- `friends` - Array of friend objects
+### Reverse Proxy (Caddy)
 
-## Development Notes
+For Quasar Vue Router with history mode, add this fallback URL to allow refreshes:
 
-- Dark theme with CSS custom properties
-- Responsive design
-- No external state management (uses React state + localStorage)
-- ESLint configured for React
+`Caddyfile`:
+```
+# CORS snippet by https://kalnytskyi.com/posts/setup-cors-caddy-2/
+(cors) {
+  @cors_preflight method OPTIONS
+  @cors header Origin {args.0}
 
-## Future Enhancements
+  handle @cors_preflight {
+    header Access-Control-Allow-Origin "{args.0}"
+    header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE"
+    header Access-Control-Allow-Headers "Content-Type"
+    header Access-Control-Max-Age "3600"
+    respond "" 204
+  }
 
-- Real Cashu wallet integration
-- Game implementations
-- WebSocket for real-time challenges
-- Backend for persistent data
-- PWA features
+  handle @cors {
+    header Access-Control-Allow-Origin "{args.0}"
+    header Access-Control-Expose-Headers "Link"
+  }
+}
+host.com {
+    import cors *
+    encode gzip
 
+    header /service-worker.js {
+            Service-Worker-Allowed "/"
+            Cache-Control "no-cache"
+    }
 
+    # SPA root
+    root * /usr/share/caddy/the-nutty-pill/
+
+    # quasar vue router fallback history mode
+    try_files {path} /index.html
+
+    file_server
+}
+```
+
+## Mobile App (Capacitor)
+
+After updating code, run:
+
+```bash
+cd cashu-me
+quasar build -m pwa
+npx cap copy
+npx cap sync
+npx cap open android / ios
+```
+
+Regenerate assets:
+```bash
+npx capacitor-assets generate
+```
+
+## Configuration
+
+See [Configuring quasar.config.js](https://v2.quasar.dev/quasar-cli-vite/quasar-config-js) for customization options.
+
+## License
+
+MIT License - see LICENSE.md for details.

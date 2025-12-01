@@ -172,7 +172,13 @@ module.exports = configure(function (/* ctx */) {
       // useFilenameHashes: true,
       // extendGenerateSWOptions (cfg) {}
       // extendInjectManifestOptions (cfg) {},
-      // extendManifestJson (json) {}
+      extendManifestJson (json) {
+        // Ensure standalone display mode
+        json.display = "standalone";
+        json.start_url = "/";
+        json.scope = "/";
+        return json;
+      },
       // extendPWACustomSWConf (esbuildConf) {}
     },
 

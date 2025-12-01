@@ -1886,9 +1886,9 @@
   <q-dialog v-model="showPasswordDialog">
     <q-card style="min-width: 300px">
       <q-card-section>
-        <div class="text-h6">Enter Parent Password</div>
+        <div class="text-h6">Enter Password</div>
         <div class="text-caption q-mt-sm">
-          Enter your parent password to view the recovery phrase
+          Enter your password to view the recovery phrase
         </div>
       </q-card-section>
       <q-card-section>

@@ -5,7 +5,7 @@
       <div class="col-12 col-sm-11 col-md-8">
         <q-card class="q-pa-md" style="max-width: 400px; margin: 0 auto;">
           <q-card-section>
-            <div class="text-h6 q-mb-md">Parent Access Required</div>
+            <div class="text-h6 q-mb-md">Password Required</div>
             <div v-if="!hasPassword">
               <div class="text-body2 q-mb-md">
                 Set up a password to access mint settings.

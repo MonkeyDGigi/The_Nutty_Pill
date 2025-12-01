@@ -617,6 +617,26 @@ export default {
       text: "This wallet is in beta. We hold no responsibility for people losing access to funds. Use at your own risk! This code is open-source and licensed under the MIT license.",
     },
   },
+  WelcomeSlideHowItWorks: {
+    title: "How It Works",
+    description: "Set up The Nutty Pill on your friend's or family member's device to help them learn about Bitcoin while earning sats!",
+    step1: {
+      title: "Set Up on Their Device",
+      text: "Install The Nutty Pill on the learner's device and create a wallet. All sats are locked by default and can only be unlocked by completing lessons.",
+    },
+    step2: {
+      title: "Secure the Private Key",
+      text: "Save the wallet's seed phrase securely. This allows you to access the wallet on cashu.me if needed to unlock sats or recover funds if something goes wrong.",
+    },
+    step3: {
+      title: "Fill the Reward Pool",
+      text: "Add sats to the wallet and set up the reward pool. The admin only needs to fill it up once - learners will unlock sats as they complete lessons.",
+    },
+    step4: {
+      title: "Let Them Learn",
+      text: "Progress is saved locally on their device, so you won't be able to track it. They'll complete Bitcoin lessons and unlock sats as they learn!",
+    },
+  },
   WelcomeSlide2: {
     title: "Install PWA",
     alt: {

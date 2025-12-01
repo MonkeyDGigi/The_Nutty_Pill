@@ -21,32 +21,35 @@
           <WelcomeSlide1 />
         </q-carousel-slide>
         <q-carousel-slide :name="1">
-          <WelcomeSlide2 />
+          <WelcomeSlideHowItWorks />
         </q-carousel-slide>
         <q-carousel-slide :name="2">
+          <WelcomeSlide2 />
+        </q-carousel-slide>
+        <q-carousel-slide :name="3">
           <WelcomeSlideChoice />
         </q-carousel-slide>
-        <!-- New wallet flow: seed display at slide 3 -->
+        <!-- New wallet flow: seed display at slide 4 -->
         <q-carousel-slide
-          :name="3"
+          :name="4"
           v-if="welcomeStore.onboardingPath === 'new'"
         >
           <WelcomeSlide3 />
         </q-carousel-slide>
-        <!-- Recover flow: seed input at slide 3 -->
+        <!-- Recover flow: seed input at slide 4 -->
         <q-carousel-slide
-          :name="3"
+          :name="4"
           v-else-if="welcomeStore.onboardingPath === 'recover'"
         >
           <WelcomeRecoverSeed />
         </q-carousel-slide>
-        <!-- Mints setup at slide 4 (both paths) -->
-        <q-carousel-slide :name="4" v-if="welcomeStore.onboardingPath">
+        <!-- Mints setup at slide 5 (both paths) -->
+        <q-carousel-slide :name="5" v-if="welcomeStore.onboardingPath">
           <WelcomeMintSetup />
         </q-carousel-slide>
-        <!-- Recover flow: restore ecash at slide 5 -->
+        <!-- Recover flow: restore ecash at slide 6 -->
         <q-carousel-slide
-          :name="5"
+          :name="6"
           v-if="welcomeStore.onboardingPath === 'recover'"
         >
           <WelcomeRestoreEcash />
@@ -88,7 +91,7 @@
           :disable="!welcomeStore.canProceed"
           @click="welcomeStore.goToNextSlide"
           v-if="
-            welcomeStore.currentSlide > 0 && welcomeStore.currentSlide !== 2
+            welcomeStore.currentSlide > 0 && welcomeStore.currentSlide !== 3
           "
         />
       </div>
@@ -101,6 +104,7 @@ import { onMounted, ref } from "vue";
 import { useWelcomeStore } from "src/stores/welcome";
 import { useStorageStore } from "src/stores/storage";
 import WelcomeSlide1 from "./welcome/WelcomeSlide1.vue";
+import WelcomeSlideHowItWorks from "./welcome/WelcomeSlideHowItWorks.vue";
 import WelcomeSlide2 from "./welcome/WelcomeSlide2.vue";
 import WelcomeSlide3 from "./welcome/WelcomeSlide3.vue";
 import WelcomeSlideChoice from "./welcome/WelcomeSlideChoice.vue";
@@ -112,6 +116,7 @@ export default {
   name: "WelcomePage",
   components: {
     WelcomeSlide1,
+    WelcomeSlideHowItWorks,
     WelcomeSlide2,
     WelcomeSlide3,
     WelcomeSlideChoice,

@@ -47,11 +47,11 @@ export const useWelcomeStore = defineStore("welcome", {
     // Determines if the current slide is the last one
     isLastSlide: (state) => {
       // Slides:
-      // 0 Intro, 1 PWA, 2 Choice,
-      // New: 3 Seed, 4 Mints (no more terms screen)
-      // Recover: 3 SeedIn, 4 Mints, 5 Restore (no more terms screen)
-      if (state.onboardingPath === "recover") return state.currentSlide === 5;
-      if (state.onboardingPath === "new") return state.currentSlide === 4;
+      // 0 Intro, 1 How It Works, 2 PWA, 3 Choice,
+      // New: 4 Seed, 5 Mints (no more terms screen)
+      // Recover: 4 SeedIn, 5 Mints, 6 Restore (no more terms screen)
+      if (state.onboardingPath === "recover") return state.currentSlide === 6;
+      if (state.onboardingPath === "new") return state.currentSlide === 5;
       // before choosing a path
       return false;
     },
@@ -60,19 +60,21 @@ export const useWelcomeStore = defineStore("welcome", {
     canProceed: (state) => {
       // 0 Intro
       if (state.currentSlide === 0) return true;
-      // 1 PWA
+      // 1 How It Works
       if (state.currentSlide === 1) return true;
-      // 2 Choice
-      if (state.currentSlide === 2) return state.onboardingPath !== "";
-      // 3 (seed phrase for both paths)
-      if (state.currentSlide === 3) {
+      // 2 PWA
+      if (state.currentSlide === 2) return true;
+      // 3 Choice
+      if (state.currentSlide === 3) return state.onboardingPath !== "";
+      // 4 (seed phrase for both paths)
+      if (state.currentSlide === 4) {
         if (state.onboardingPath === "new") return state.seedPhraseValidated;
         if (state.onboardingPath === "recover") return state.seedEnteredValid;
       }
-      // 4 (mints setup for both paths - last step for "new" path)
-      if (state.currentSlide === 4) return state.mintSetupCompleted || true;
-      // 5 (restore step for recover path - last step for "recover" path)
-      if (state.currentSlide === 5) {
+      // 5 (mints setup for both paths - last step for "new" path)
+      if (state.currentSlide === 5) return state.mintSetupCompleted || true;
+      // 6 (restore step for recover path - last step for "recover" path)
+      if (state.currentSlide === 6) {
         if (state.onboardingPath === "recover")
           return state.ecashRestoreCompleted || true;
       }

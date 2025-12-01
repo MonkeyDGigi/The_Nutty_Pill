@@ -9,7 +9,7 @@
     <meta name="msapplication-tap-highlight" content="no" />
     <meta
       name="viewport"
-      content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width<% if (ctx.mode.cordova || ctx.mode.capacitor) { %>, viewport-fit=cover<% } %>"
+      content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, viewport-fit=cover"
     />
     <!-- PWA Meta Tags for Standalone Mode -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -85,6 +85,49 @@
           // Ensure full viewport to prevent browser UI from showing
           document.documentElement.style.height = '100%';
           document.documentElement.style.width = '100%';
+          document.documentElement.style.position = 'fixed';
+          document.documentElement.style.overflow = 'hidden';
+          
+          // Prevent address bar from showing on mobile
+          var lastScrollTop = 0;
+          var ticking = false;
+          
+          function preventBrowserUI() {
+            if (!ticking) {
+              window.requestAnimationFrame(function() {
+                var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                if (scrollTop !== lastScrollTop) {
+                  // Force scroll to top to prevent browser UI
+                  if (scrollTop > 0 && scrollTop < 10) {
+                    window.scrollTo(0, 0);
+                  }
+                }
+                lastScrollTop = scrollTop;
+                ticking = false;
+              });
+              ticking = true;
+            }
+          }
+          
+          // Prevent scroll on body
+          document.body.style.position = 'fixed';
+          document.body.style.width = '100%';
+          document.body.style.height = '100%';
+          document.body.style.overflow = 'hidden';
+          
+          // Make app container scrollable instead
+          window.addEventListener('DOMContentLoaded', function() {
+            var app = document.getElementById('q-app');
+            if (app) {
+              app.style.position = 'fixed';
+              app.style.top = '0';
+              app.style.left = '0';
+              app.style.width = '100%';
+              app.style.height = '100%';
+              app.style.overflowY = 'auto';
+              app.style.overflowX = 'hidden';
+            }
+          });
         }
       })();
     </script>

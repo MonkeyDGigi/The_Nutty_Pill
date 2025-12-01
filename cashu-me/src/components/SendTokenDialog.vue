@@ -70,16 +70,6 @@
           </div>
         </div>
 
-        <!-- Mint selection -->
-        <div class="row justify-center">
-          <div
-            class="col-12 col-sm-11 col-md-8 q-px-lg q-mb-sm"
-            style="max-width: 600px"
-          >
-            <ChooseMint />
-          </div>
-        </div>
-
         <!-- Amount display -->
         <div class="col column items-center justify-center q-px-lg amount-area">
           <!-- Floating P2PK input overlay -->
@@ -277,7 +267,6 @@ import { useCameraStore } from "src/stores/camera";
 import { useP2PKStore } from "src/stores/p2pk";
 import { useEducationStore } from "src/stores/education";
 import { mapActions, mapState, mapWritableState } from "pinia";
-import ChooseMint from "components/ChooseMint.vue";
 import NumericKeyboard from "components/NumericKeyboard.vue";
 import DisplayTokenComponent from "components/DisplayTokenComponent.vue";
 import AmountInputComponent from "components/AmountInputComponent.vue";
@@ -295,7 +284,6 @@ export default defineComponent({
   name: "SendTokenDialog",
   mixins: [windowMixin],
   components: {
-    ChooseMint,
     NumericKeyboard,
     DisplayTokenComponent,
     AmountInputComponent,

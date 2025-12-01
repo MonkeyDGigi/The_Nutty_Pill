@@ -1,12 +1,5 @@
 // app global css in SCSS form
 
-// Ensure full viewport for PWA standalone mode
-html {
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
-}
-
 // Minimalistic smooth design
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
@@ -17,53 +10,6 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  height: 100%;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  position: fixed;
-  overflow: hidden;
-}
-
-// App container should be scrollable, not body
-#q-app {
-  height: 100vh;
-  height: 100dvh; // Dynamic viewport height for mobile
-  width: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-}
-
-// Ensure all pages take full height
-.q-page {
-  min-height: 100vh;
-  min-height: 100dvh;
-}
-
-// Prevent browser UI from showing on scroll
-@media (display-mode: standalone) {
-  html, body {
-    position: fixed;
-    overflow: hidden;
-    width: 100%;
-    height: 100%;
-  }
-  
-  #q-app {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
 }
 
 // Ensure theme is applied even if localStorage fails (private mode)
@@ -83,6 +29,20 @@ html,
 body {
   overscroll-behavior: none;
   background: #1A0D2E !important; /* Dark Purple */
+}
+
+// Fix notification positioning to account for safe areas
+.q-notifications {
+  top: calc(env(safe-area-inset-top) + 8px) !important;
+  right: calc(env(safe-area-inset-right) + 8px) !important;
+  bottom: calc(env(safe-area-inset-bottom) + 8px) !important;
+  left: calc(env(safe-area-inset-left) + 8px) !important;
+  z-index: 9999 !important;
+}
+
+// Ensure notifications don't overlap with camera or other UI
+.q-notification {
+  margin-bottom: calc(env(safe-area-inset-bottom) + 8px) !important;
 }
 
 // Minimalistic Card styling - smooth, thin borders, rounded corners
@@ -109,6 +69,9 @@ body {
 // Map CSS env() safe area to our custom variable for PWA iOS
 :root {
   --safe-area-inset-top: env(safe-area-inset-top);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom);
+  --safe-area-inset-left: env(safe-area-inset-left);
+  --safe-area-inset-right: env(safe-area-inset-right);
 }
 
 // margin for top elements for ios safe area
@@ -117,6 +80,7 @@ body,
 .q-header,
 .q-dialog__inner > div {
   margin-top: var(--safe-area-inset-top);
+  padding-bottom: var(--safe-area-inset-bottom);
 }
 
 .q-dialog__inner > div {

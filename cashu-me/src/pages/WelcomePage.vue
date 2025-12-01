@@ -57,8 +57,9 @@
       </q-carousel>
 
       <div
-        class="q-pa-md flex justify-between"
+        class="q-pa-md flex justify-between welcome-navigation"
         v-if="welcomeStore.currentSlide > 0"
+        style="padding-bottom: calc(16px + env(safe-area-inset-bottom));"
       >
         <q-btn
           flat
@@ -202,21 +203,38 @@ export default {
   height: 100%;
   width: 100%;
   margin: 0; /* Align dialog to cover the entire viewport */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  box-sizing: border-box;
 }
 
 .q-card {
   display: flex;
   flex-direction: column;
   height: 100%;
+  max-height: 100vh;
+  max-height: 100dvh;
+  overflow: hidden;
 }
 
 .q-carousel {
   flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  min-height: 0; /* Allow flex item to shrink */
+}
+
+.welcome-navigation {
+  flex-shrink: 0; /* Prevent navigation from shrinking */
+  min-height: 60px; /* Ensure minimum height for buttons */
+  z-index: 10; /* Ensure navigation is above content */
+  position: relative;
 }
 
 .custom-navigation {
   display: flex;
   justify-content: space-between;
   padding: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
 }
 </style>

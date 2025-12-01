@@ -74,6 +74,19 @@
           }
         }
       })();
+
+      // Prevent browser UI from showing in PWA standalone mode
+      (function() {
+        // Check if running as PWA
+        var isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                          (window.navigator.standalone === true);
+        
+        if (isStandalone) {
+          // Ensure full viewport to prevent browser UI from showing
+          document.documentElement.style.height = '100%';
+          document.documentElement.style.width = '100%';
+        }
+      })();
     </script>
   </head>
   <body>

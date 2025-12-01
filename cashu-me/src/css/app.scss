@@ -1,5 +1,12 @@
 // app global css in SCSS form
 
+// Ensure full viewport for PWA standalone mode
+html {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
 // Minimalistic smooth design
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
@@ -10,6 +17,23 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  position: fixed;
+  overflow: hidden;
+}
+
+// App container should be scrollable, not body
+#q-app {
+  height: 100vh;
+  height: 100dvh; // Dynamic viewport height for mobile
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
 }
 
 // Ensure theme is applied even if localStorage fails (private mode)

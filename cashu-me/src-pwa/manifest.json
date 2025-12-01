@@ -1,11 +1,13 @@
 {
-  "name": "Cashu.me",
-  "short_name": "Cashu.me",
-  "description": "A Cashu Ecash wallet for the web.",
+  "name": "The Nutty Pill",
+  "short_name": "Nutty Pill",
+  "description": "Learn Bitcoin and unlock sats!",
   "display": "standalone",
+  "start_url": "/",
+  "scope": "/",
   "orientation": "portrait",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#0A0A0A",
+  "theme_color": "#FF00FF",
   "protocol_handlers": [
     {
       "protocol": "web+cashu",

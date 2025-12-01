@@ -35,8 +35,8 @@ export default route(function (/* { store, ssrContext } */) {
 
   // Navigation guard to check if wallet is initialized
   Router.beforeEach((to, from, next) => {
-    // Allow access to welcome page and already-running page without wallet check
-    if (to.path === "/welcome" || to.path === "/already-running") {
+    // Allow access to welcome page (and all its steps) and already-running page without wallet check
+    if (to.path.startsWith("/welcome") || to.path === "/already-running") {
       next();
       return;
     }

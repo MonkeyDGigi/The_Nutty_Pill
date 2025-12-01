@@ -110,14 +110,12 @@ export const useWelcomeStore = defineStore("welcome", {
     /**
      * Initializes the welcome dialog based on local storage.
      * Should be called when the store is initialized.
+     * Note: Navigation is now handled by the router, so this is mainly for state checking.
      */
     initializeWelcome() {
       // Check wallet status first
       this.checkWalletAndUpdateWelcome();
-      
-      if (!this.showWelcome) {
-        window.location.href = "/";
-      }
+      // Navigation is handled by router guard, so we don't need to redirect here
     },
 
     /**
@@ -127,9 +125,7 @@ export const useWelcomeStore = defineStore("welcome", {
       this.showWelcome = false;
       // Reset the slide to the beginning for next time (if welcome is ever shown again)
       this.currentSlide = 0;
-      // Redirect to home or desired route
-      window.location.href =
-        "/" + window.location.search + window.location.hash;
+      // Note: Navigation is now handled by the router in WelcomePage component
     },
     setPath(path: "new" | "recover") {
       this.onboardingPath = path;

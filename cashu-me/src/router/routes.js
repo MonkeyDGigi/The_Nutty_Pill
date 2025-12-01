@@ -65,7 +65,16 @@ const routes = [
     path: "/welcome",
     component: () => import("layouts/BlankLayout.vue"),
     children: [
-      { path: "", component: () => import("src/pages/WelcomePage.vue") },
+      { 
+        path: "", 
+        component: () => import("src/pages/WelcomePage.vue"),
+        name: "welcome"
+      },
+      { 
+        path: ":step", 
+        component: () => import("src/pages/WelcomePage.vue"),
+        name: "welcome-step"
+      },
     ],
   },
   {

@@ -1,21 +1,12 @@
-<!-- src/components/WelcomePage.vue -->
+<!-- src/pages/WelcomePage.vue -->
 <template>
-  <q-dialog
-    v-model="welcomeStore.showWelcome"
-    persistent
-    transition-show="slide-up"
-    transition-hide="fadeOut"
-    full-screen
-    @drop.prevent="dragFile"
-    @dragover.prevent
-  >
-    <q-card class="q-pa-none" style="height: 100%">
+  <div class="welcome-page" @drop.prevent="dragFile" @dragover.prevent>
+    <q-card class="q-pa-none welcome-card">
       <q-carousel
-        v-model="welcomeStore.currentSlide"
+        v-model="currentSlide"
         animated
         control-color="primary"
-        class="flex-1"
-        style="height: 100%"
+        class="flex-1 welcome-carousel"
       >
         <q-carousel-slide :name="0">
           <WelcomeSlide1 />
@@ -58,20 +49,20 @@
 
       <div
         class="q-pa-md flex justify-between welcome-navigation"
-        v-if="welcomeStore.currentSlide > 0"
+        v-if="currentSlide > 0"
         style="padding-bottom: calc(16px + env(safe-area-inset-bottom));"
       >
         <q-btn
           flat
           icon="arrow_left"
           :label="$t('WelcomePage.actions.previous.label')"
-          v-if="welcomeStore.canGoPrev"
-          @click="welcomeStore.goToPrevSlide"
+          v-if="canGoPrev"
+          @click="goToPrevSlide"
         />
         <!-- language selector (hidden on first slide since it's now in the slide itself) -->
         <div
           class="q-ml-md"
-          v-if="!welcomeStore.canGoPrev && welcomeStore.currentSlide > 0"
+          v-if="!canGoPrev && currentSlide > 0"
           style="position: relative; top: -5px"
         >
           <q-select
@@ -89,19 +80,18 @@
           flat
           icon="arrow_right"
           :label="$t('WelcomePage.actions.next.label')"
-          :disable="!welcomeStore.canProceed"
-          @click="welcomeStore.goToNextSlide"
-          v-if="
-            welcomeStore.currentSlide > 0 && welcomeStore.currentSlide !== 3
-          "
+          :disable="!canProceed"
+          @click="goToNextSlide"
+          v-if="currentSlide > 0 && currentSlide !== 3"
         />
       </div>
     </q-card>
-  </q-dialog>
+  </div>
 </template>
 
 <script lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, computed, watch } from "vue";
+import { useRouter, useRoute } from "vue-router";
 import { useWelcomeStore } from "src/stores/welcome";
 import { useStorageStore } from "src/stores/storage";
 import WelcomeSlide1 from "./welcome/WelcomeSlide1.vue";
@@ -125,6 +115,143 @@ export default {
     WelcomeMintSetup,
     WelcomeRestoreEcash,
   },
+  setup() {
+    const router = useRouter();
+    const route = useRoute();
+    const welcomeStore = useWelcomeStore();
+    const storageStore = useStorageStore();
+    const fileUpload = ref(null);
+    
+    // Get current slide from route param or default to 0
+    const getStepFromRoute = () => {
+      const stepParam = route.params.step;
+      const stepStr = Array.isArray(stepParam) ? stepParam[0] : stepParam;
+      return parseInt(stepStr || '0') || 0;
+    };
+    const currentSlide = ref(getStepFromRoute());
+    
+    // Sync route param with local state and store
+    watch(() => route.params.step, (newStep) => {
+      const stepStr = Array.isArray(newStep) ? newStep[0] : newStep;
+      const step = parseInt(stepStr || '0') || 0;
+      if (step !== currentSlide.value) {
+        currentSlide.value = step;
+        welcomeStore.setCurrentSlide(step);
+      }
+    }, { immediate: true });
+    
+    // Sync store changes to route (when other components update the store)
+    watch(() => welcomeStore.currentSlide, (newSlide) => {
+      if (newSlide !== currentSlide.value) {
+        currentSlide.value = newSlide;
+        const step = newSlide.toString();
+        if (route.params.step !== step) {
+          router.push({ name: step === '0' ? 'welcome' : 'welcome-step', params: { step } });
+        }
+      }
+    });
+    
+    // Sync local slide changes to route
+    watch(currentSlide, (newSlide) => {
+      const step = newSlide.toString();
+      const currentStep = Array.isArray(route.params.step) ? route.params.step[0] : route.params.step;
+      if (currentStep !== step) {
+        router.push({ name: step === '0' ? 'welcome' : 'welcome-step', params: { step } });
+      }
+      welcomeStore.setCurrentSlide(newSlide);
+    });
+
+    const onChangeFileUpload = () => {
+      const input = fileUpload.value as HTMLInputElement | null;
+      const file = input?.files?.[0];
+      if (file) readFile(file);
+    };
+
+    const readFile = (file: File) => {
+      const reader = new FileReader();
+      reader.onload = (f: ProgressEvent<FileReader>) => {
+        if (f.target?.result && typeof f.target.result === 'string') {
+          const backup = JSON.parse(f.target.result);
+          storageStore.restoreFromBackup(backup);
+        }
+      };
+      reader.readAsText(file);
+    };
+
+    const dragFile = (ev: DragEvent) => {
+      const file = ev.dataTransfer?.files?.[0];
+      if (file) readFile(file);
+    };
+    
+    const goToPrevSlide = () => {
+      if (currentSlide.value > 0) {
+        currentSlide.value -= 1;
+      }
+    };
+    
+    const goToNextSlide = () => {
+      if (canProceed.value) {
+        if (isLastSlide.value) {
+          welcomeStore.closeWelcome();
+          router.push('/');
+        } else {
+          currentSlide.value += 1;
+        }
+      }
+    };
+    
+    const canGoPrev = computed(() => currentSlide.value > 0);
+    const canProceed = computed(() => {
+      // 0 Intro
+      if (currentSlide.value === 0) return true;
+      // 1 How It Works
+      if (currentSlide.value === 1) return true;
+      // 2 PWA
+      if (currentSlide.value === 2) return true;
+      // 3 Choice
+      if (currentSlide.value === 3) return welcomeStore.onboardingPath !== "";
+      // 4 (seed phrase for both paths)
+      if (currentSlide.value === 4) {
+        if (welcomeStore.onboardingPath === "new") return welcomeStore.seedPhraseValidated;
+        if (welcomeStore.onboardingPath === "recover") return welcomeStore.seedEnteredValid;
+      }
+      // 5 (mints setup for both paths - last step for "new" path)
+      if (currentSlide.value === 5) return welcomeStore.mintSetupCompleted || true;
+      // 6 (restore step for recover path - last step for "recover" path)
+      if (currentSlide.value === 6) {
+        if (welcomeStore.onboardingPath === "recover")
+          return welcomeStore.ecashRestoreCompleted || true;
+      }
+      return false;
+    });
+    
+    const isLastSlide = computed(() => {
+      if (welcomeStore.onboardingPath === "recover") return currentSlide.value === 6;
+      if (welcomeStore.onboardingPath === "new") return currentSlide.value === 5;
+      return false;
+    });
+
+    onMounted(() => {
+      welcomeStore.checkWalletAndUpdateWelcome();
+      // Initialize slide from route
+      const step = getStepFromRoute();
+      currentSlide.value = step;
+      welcomeStore.setCurrentSlide(step);
+    });
+
+    return {
+      welcomeStore,
+      currentSlide,
+      fileUpload,
+      onChangeFileUpload,
+      dragFile,
+      goToPrevSlide,
+      goToNextSlide,
+      canGoPrev,
+      canProceed,
+      isLastSlide,
+    };
+  },
   data() {
     return {
       selectedLanguage: "",
@@ -145,7 +272,7 @@ export default {
     };
   },
   methods: {
-    changeLanguage(locale) {
+    changeLanguage(locale: string) {
       // Set the i18n locale
       this.$i18n.locale = locale;
 
@@ -160,64 +287,32 @@ export default {
         (option) => option.value === this.$i18n.locale || navigator.language
       )?.label || "Language";
   },
-  setup() {
-    const welcomeStore = useWelcomeStore();
-    const storageStore = useStorageStore();
-    const fileUpload = ref(null);
-
-    const onChangeFileUpload = () => {
-      const file = fileUpload.value.files[0];
-      if (file) readFile(file);
-    };
-
-    const readFile = (file) => {
-      const reader = new FileReader();
-      reader.onload = (f) => {
-        const backup = JSON.parse(f.target.result);
-        storageStore.restoreFromBackup(backup);
-      };
-      reader.readAsText(file);
-    };
-
-    const dragFile = (ev) => {
-      const file = ev.dataTransfer.files[0];
-      if (file) readFile(file);
-    };
-
-    onMounted(() => {
-      welcomeStore.initializeWelcome();
-    });
-
-    return {
-      welcomeStore,
-      fileUpload,
-      onChangeFileUpload,
-      dragFile,
-    };
-  },
 };
 </script>
 
 <style scoped>
-.q-dialog__inner {
-  height: 100%;
+.welcome-page {
+  height: 100vh;
+  height: 100dvh;
   width: 100%;
-  margin: 0; /* Align dialog to cover the entire viewport */
+  display: flex;
+  flex-direction: column;
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
   box-sizing: border-box;
+  background: var(--q-dark);
 }
 
-.q-card {
+.welcome-card {
   display: flex;
   flex-direction: column;
   height: 100%;
-  max-height: 100vh;
-  max-height: 100dvh;
+  max-height: 100%;
   overflow: hidden;
+  background: transparent;
 }
 
-.q-carousel {
+.welcome-carousel {
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;

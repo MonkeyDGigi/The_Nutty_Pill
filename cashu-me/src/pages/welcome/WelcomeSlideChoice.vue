@@ -60,7 +60,7 @@ export default {
     const choose = (path: "new" | "recover") => {
       welcomeStore.setPath(path);
       // advance to next stage immediately for snappier UX
-      welcomeStore.setCurrentSlide(3);
+      welcomeStore.setCurrentSlide(4);
     };
     return { welcomeStore, walletStore, choose };
   },

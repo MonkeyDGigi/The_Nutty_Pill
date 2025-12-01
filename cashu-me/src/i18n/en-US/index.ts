@@ -678,7 +678,7 @@ export default {
     pwa: {
       success: {
         title: "Success!",
-        text: "You are using Cashu as a PWA. Close any other open browser windows and use the app from your home screen.",
+        text: "You are using The Nutty Pill as a PWA. Close any other open browser windows and use the app from your home screen.",
         nextSteps:
           "You can now close this browser tab and open the app from your home screen.",
       },

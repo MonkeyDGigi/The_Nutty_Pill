@@ -237,10 +237,10 @@ export const useNostrUserStore = defineStore("nostrUser", {
           `[nostrUser] Crawling web of trust from ${source} up to ${maxHops} hops…`
         );
         // Determine resume vs fresh crawl
-        let hop1Saved = (await db.meta.get("wot.crawl.hop1"))?.value as
+        const hop1Saved = (await db.meta.get("wot.crawl.hop1"))?.value as
           | string[]
           | undefined;
-        let nextIndexSaved = (await db.meta.get("wot.crawl.nextIndex"))
+        const nextIndexSaved = (await db.meta.get("wot.crawl.nextIndex"))
           ?.value as number | undefined;
         let hop1: string[] = [];
         let startIndex = 0;
@@ -382,10 +382,8 @@ export const useNostrUserStore = defineStore("nostrUser", {
       this.crawlCheckpointNextIndex = 0;
       this.crawlCheckpointTotal = 0;
     },
-    clearAllDatabases: function () {
-      db.wot.clear();
-      db.follows.clear();
-      db.meta.clear();
+    clearAllDatabases: async function () {
+      await Promise.all([db.wot.clear(), db.follows.clear(), db.meta.clear()]);
     },
   },
 });

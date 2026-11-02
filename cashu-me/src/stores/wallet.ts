@@ -1,21 +1,65 @@
 import { defineStore } from "pinia";
 import { currentDateStr } from "src/js/utils";
-import { useMintsStore, WalletProof, MintClass, Mint } from "./mints";
+import { useMintsStore, WalletProof, MintClass, StoredMint } from "./mints";
 import { useLocalStorage } from "@vueuse/core";
 import { useProofsStore } from "./proofs";
+import {
+  autoLockSats,
+  holdSpend,
+  refundSpend,
+  releaseSpend,
+  settleSpend,
+} from "./educationLock";
 import { HistoryToken, useTokensStore } from "./tokens";
 import { useReceiveTokensStore } from "./receiveTokensStore";
-import { useUiStore } from "src/stores/ui";
+import { type MutexPriority, useUiStore } from "src/stores/ui";
 import { useP2PKStore } from "src/stores/p2pk";
 import { useSendTokensStore } from "src/stores/sendTokensStore";
 import { usePRStore } from "./payment-request";
-import { useWorkersStore } from "./workers";
-import { useInvoicesWorkerStore } from "./invoicesWorker";
-import * as nobleSecp256k1 from "@noble/secp256k1";
-import { bytesToHex } from "@noble/hashes/utils";
+import { useTransactionWorkerStore } from "./transactionWorker";
 
-import * as _ from "underscore";
+import {
+  requestMintBolt11,
+  mintBolt11,
+  meltQuoteInvoiceDataBolt11,
+  meltQuoteBolt11,
+  meltInvoiceDataBolt11,
+  meltBolt11,
+  checkInvoiceBolt11,
+  checkOutgoingInvoiceBolt11,
+  mintOnPaidBolt11,
+  handleBolt11InvoiceBolt11,
+} from "./walletBolt11";
+import {
+  requestMintBolt12,
+  checkOfferAndMintBolt12,
+  checkOutgoingInvoiceBolt12,
+  meltQuoteInvoiceDataBolt12,
+  meltInvoiceDataBolt12,
+  meltBolt12,
+  mintOnPaidBolt12,
+} from "./walletBolt12";
+import {
+  requestMintOnchain,
+  checkOnchainAndMint,
+  checkOutgoingOnchain,
+  meltQuoteInvoiceDataOnchain,
+  meltInvoiceDataOnchain,
+  meltOnchain,
+  mintOnPaidOnchain,
+} from "./walletOnchain";
+import {
+  type AppMeltQuote,
+  checkOutgoingInvoiceGeneric,
+  clearMeltChangeOutputData,
+  finalizePaidMeltInvoice,
+  meltGeneric,
+  setMeltChangeOutputData,
+} from "./walletMelt";
+
+import _ from "underscore";
 import token from "src/js/token";
+import { sumProofAmounts } from "src/js/proofs";
 import {
   notifyApiError,
   notifyError,
@@ -24,23 +68,30 @@ import {
   notify,
 } from "src/js/notify";
 import {
-  CashuMint,
-  CashuWallet,
+  Amount,
+  Wallet,
   Proof,
-  MintQuotePayload,
-  MeltQuotePayload,
-  MeltQuoteResponse,
+  type ProofLike,
+  MintQuoteBolt11Request,
+  MeltQuoteBolt11Request,
+  MintQuoteBolt11Response,
+  MintQuoteBolt12Response,
+  MintQuoteOnchainResponse,
   CheckStateEnum,
-  MeltQuoteState,
   MintQuoteState,
   PaymentRequest,
   PaymentRequestTransportType,
   PaymentRequestTransport,
   decodePaymentRequest,
-  MintQuoteResponse,
   ProofState,
+  KeyChain,
+  type AmountLike,
+  type P2PKOptions,
+  type CounterSource,
+  createEphemeralCounterSource,
+  StaleKeysetError,
+  // ConsoleLogger,
 } from "@cashu/cashu-ts";
-import { hashToCurve } from "@cashu/crypto/modules/common";
 // @ts-ignore
 import * as bolt11Decoder from "light-bolt11-decoder";
 import { bech32 } from "bech32";
@@ -54,33 +105,77 @@ import { generateMnemonic, mnemonicToSeedSync } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { useSettingsStore } from "./settings";
 import { usePriceStore } from "./price";
+import { usePaymentHistoryStore } from "./paymentHistory";
 import { useI18n } from "vue-i18n";
-// HACK: this is a workaround so that the catch block in the melt function does not throw an error when the user exits the app
-// before the payment is completed. This is necessary because the catch block in the melt function would otherwise remove all
-// quotes from the invoiceHistory and the user would not be able to pay the invoice again after reopening the app.
-let isUnloading = false;
-window.addEventListener("beforeunload", () => {
-  isUnloading = true;
-});
+import { decodeBolt12Offer } from "src/js/bolt12";
+import { ensurePaymentMethodMintActive } from "src/js/mint-payment-methods";
+import {
+  isLegacyRetailQR,
+  translateLegacyQRToLightningAddress,
+} from "src/js/legacy-qr";
+import { onchainNetwork } from "src/js/onchain";
+import { PaymentMethod } from "src/stores/walletTypes";
 
 type Invoice = {
   amount: number;
-  bolt11: string;
+  request: string;
   quote: string;
   memo: string;
+  type?: PaymentMethod;
+};
+
+const activeSentTokenSubscriptions = new Set<string>();
+
+// The app uses number-typed amounts (strategy b). These types represent
+// cashu-ts quote responses with top-level Amount fields converted to number.
+type AppMintQuote = Omit<
+  MintQuoteBolt11Response | MintQuoteBolt12Response | MintQuoteOnchainResponse,
+  "amount" | "amount_paid" | "amount_issued"
+> & {
+  amount: number | null;
+  amount_paid?: number;
+  amount_issued?: number;
 };
 
 export type InvoiceHistory = Invoice & {
+  id?: string;
   date: string;
   status: "pending" | "paid";
   mint: string;
   unit: string;
-  mintQuote?: MintQuoteResponse;
-  meltQuote?: MeltQuoteResponse;
-  label?: string; // Add label field for custom naming
-  privKey?: string; // Private key, if the quote is locked
+  mintQuote?: AppMintQuote;
+  meltQuote?: AppMeltQuote;
+  label?: string;
+  privKey?: string;
   paidDate?: string;
+  meltChangeOutputData?: any[];
+  // Legacy persisted name; keep readable until old pending melts have cleared.
+  meltOutputData?: any[];
+  network?: string;
+  // Amount entered when creating an on-chain address, in `unit`.
+  requestedAmount?: number;
+  parentQuote?: string;
+  method?: PaymentMethod;
+  direction?: "mint" | "melt";
 };
+
+function createIncomingInvoiceDraft(
+  method: PaymentMethod = PaymentMethod.Bolt11
+): InvoiceHistory {
+  return {
+    amount: 0,
+    request: "",
+    quote: "",
+    memo: "",
+    date: "",
+    status: "pending",
+    mint: "",
+    unit: "",
+    type: method,
+    method,
+    direction: "mint",
+  };
+}
 
 type KeysetCounter = {
   id: string;
@@ -90,6 +185,47 @@ type KeysetCounter = {
 const receiveStore = useReceiveTokensStore();
 const tokenStore = useTokensStore();
 const proofsStore = useProofsStore();
+const RECEIVE_SUCCESS_HIDE_DELAY_MS = 5000;
+
+function amountToNumber(value: AmountLike | undefined): number {
+  if (value === undefined) return 0;
+  return Amount.from(value).toNumber();
+}
+function normalizeMintQuote(
+  quote:
+    | MintQuoteBolt11Response
+    | MintQuoteBolt12Response
+    | MintQuoteOnchainResponse
+): AppMintQuote {
+  const amount = "amount" in quote ? quote.amount : null;
+  const rest = { ...quote } as any;
+  delete rest.amount;
+  return {
+    ...rest,
+    amount: amount === null ? null : amountToNumber(amount),
+    amount_paid:
+      "amount_paid" in quote ? amountToNumber(quote.amount_paid) : undefined,
+    amount_issued:
+      "amount_issued" in quote
+        ? amountToNumber(quote.amount_issued)
+        : undefined,
+  };
+}
+/**
+ * Convert WalletProofs to Proof[] with Amount for cashu-ts APIs that
+ * require Proof[] (e.g. selectProofsToSend). Strips app-local fields
+ * (`reserved`, `quote`) so the result is a clean Proof.
+ */
+function newSpendId(): string {
+  return `send-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+function toProofs(proofs: WalletProof[]): Proof[] {
+  return proofs.map(({ reserved, quote, amount, ...rest }) => ({
+    ...rest,
+    amount: Amount.from(amount),
+  }));
+}
 
 export const useWalletStore = defineStore("wallet", {
   state: () => {
@@ -97,10 +233,8 @@ export const useWalletStore = defineStore("wallet", {
     return {
       t: t,
       mnemonic: useLocalStorage("cashu.mnemonic", ""),
-      invoiceHistory: useLocalStorage(
-        "cashu.invoiceHistory",
-        [] as InvoiceHistory[]
-      ),
+      invoiceHistory: [] as InvoiceHistory[],
+      paymentHistoryUnsubscribe: null as null | (() => void),
       keysetCounters: useLocalStorage(
         "cashu.keysetCounters",
         [] as KeysetCounter[]
@@ -109,30 +243,37 @@ export const useWalletStore = defineStore("wallet", {
         "cashu.oldMnemonicCounters",
         [] as { mnemonic: string; keysetCounters: KeysetCounter[] }[]
       ),
-      invoiceData: {} as InvoiceHistory,
+      sharedCounterSource: null as CounterSource | null,
+      invoiceData: createIncomingInvoiceDraft(),
       activeWebsocketConnections: 0,
       payInvoiceData: {
         blocking: false,
-        bolt11: "",
+        paying: false,
+        request: "",
         show: false,
         fee_paid: 0,
         meltQuote: {
           payload: {
             unit: "",
             request: "",
-          } as MeltQuotePayload,
+          } as MeltQuoteBolt11Request,
           response: {
             quote: "",
             amount: 0,
             fee_reserve: 0,
-          } as MeltQuoteResponse,
+          } as AppMeltQuote,
           error: "",
         },
         invoice: {
           sat: 0,
           memo: "",
-          bolt11: "",
-        } as { sat: number; memo: string; bolt11: string } | null,
+          request: "",
+        } as {
+          sat: number;
+          memo: string;
+          request: string;
+          bolt12?: string;
+        } | null,
         lnurlpay: {
           domain: "",
           callback: "",
@@ -156,58 +297,175 @@ export const useWalletStore = defineStore("wallet", {
           comment: string;
           quote: string;
         },
+        paymentMethod: null as PaymentMethod | null,
       },
     };
   },
   getters: {
-    wallet() {
-      const mints = useMintsStore() as any;
-      const mint = new CashuMint(mints.activeMintUrl);
-      if (this.mnemonic == "") {
-        this.mnemonic = generateMnemonic(wordlist);
-      }
-      const mnemonic: string = this.mnemonic;
-      const bip39Seed = mnemonicToSeedSync(mnemonic);
-      const wallet = new CashuWallet(mint, {
-        keys: mints.activeKeys,
-        keysets: mints.activeKeysets,
-        mintInfo: mints.activeInfo,
-        bip39seed: bip39Seed,
-        unit: mints.activeUnit,
-      });
-      return wallet;
-    },
     seed(): Uint8Array {
       return mnemonicToSeedSync(this.mnemonic);
     },
   },
   actions: {
-    setMnemonicFromUser: function (mnemonic: string) {
-      this.mnemonic = mnemonic;
+    async initPaymentHistory() {
+      const paymentHistoryStore = usePaymentHistoryStore();
+      await paymentHistoryStore.init();
+      if (!this.paymentHistoryUnsubscribe) {
+        this.paymentHistoryUnsubscribe = paymentHistoryStore.$subscribe(
+          (_mutation, state) => {
+            this.invoiceHistory = state.invoiceHistory as InvoiceHistory[];
+          },
+          { detached: true }
+        );
+      }
+      this.syncPaymentHistoryCache();
     },
-    mintWallet(url: string, unit: string): CashuWallet {
+    syncPaymentHistoryCache() {
+      const paymentHistoryStore = usePaymentHistoryStore();
+      this.invoiceHistory =
+        paymentHistoryStore.invoiceHistory as InvoiceHistory[];
+    },
+    resetInvoiceData(method: PaymentMethod = PaymentMethod.Bolt11) {
+      this.invoiceData = createIncomingInvoiceDraft(method);
+    },
+    async addPaymentHistory(invoice: InvoiceHistory) {
+      const paymentHistoryStore = usePaymentHistoryStore();
+      this.invoiceHistory.push(invoice);
+      await paymentHistoryStore.addPayment(invoice);
+      this.syncPaymentHistoryCache();
+    },
+    setMnemonicFromUser: function (mnemonic: string) {
+      this.mnemonic = mnemonic.trim().toLowerCase(); // normalize
+    },
+    /**
+     * Returns a fully initialised Wallet for the active mint.
+     * Calls loadMint internally, so is safe for all wallet operations.
+     */
+    async activeWallet(updateKeysets: boolean = false): Promise<Wallet> {
+      const mints = useMintsStore();
+      return this.mintWallet(
+        mints.activeMintUrl,
+        mints.activeUnit,
+        updateKeysets
+      );
+    },
+    async mintWallet(
+      url: string,
+      unit: string,
+      updateKeysets: boolean = false
+    ): Promise<Wallet> {
       // short-lived wallet for mint operations
       // note: the unit of the wallet will be activeUnit by default,
       // overwrite wallet.unit if needed
-      const mints = useMintsStore() as any;
-      const storedMint = mints.mints.find((m: any) => m.url === url);
+      const mints = useMintsStore();
+      let storedMint = mints.mints.find((m) => m.url === url);
       if (!storedMint) {
         throw new Error("mint not found");
       }
-      const unitKeysets = mints.mintUnitKeysets(storedMint, unit);
-      const mint = new CashuMint(url);
+      // if updateKeysets is true and keysetsLastFetched is older than 1 hour, fetch the keysets for the mint
+      const ONE_HOUR = 60 * 60 * 1000;
+      const lastUpdated = storedMint.lastKeysetsUpdated
+        ? new Date(storedMint.lastKeysetsUpdated).getTime()
+        : 0;
+      const mintNeedsUpdate =
+        updateKeysets && lastUpdated < Date.now() - ONE_HOUR;
+      if (mintNeedsUpdate) {
+        console.log("updating mint info and keys for mint", storedMint.url);
+        try {
+          await mints.updateMintInfoAndKeys(storedMint);
+          // Re-fetch mint after update to get fresh keysets
+          storedMint = mints.mints.find((m) => m.url === url) ?? storedMint;
+        } catch (error: any) {
+          console.error("Failed to update mint info/keys:", error);
+          // Continue with potentially stale keysets rather than failing
+        }
+      }
+      return this.createWalletInstance(storedMint, url, unit);
+    },
+    // Synchronous wallet creation for non-critical operations (e.g., fee calculation display)
+    // Use mintWallet() with updateKeysets=true for critical operations
+    mintWalletSync(url: string, unit: string): Wallet {
+      const mints = useMintsStore();
+      const storedMint = mints.mints.find((m) => m.url === url);
+      if (!storedMint) {
+        throw new Error("mint not found");
+      }
+      return this.createWalletInstance(storedMint, url, unit);
+    },
+    getOrCreateCounterSource(): CounterSource {
+      if (!this.sharedCounterSource) {
+        const initial = Object.fromEntries(
+          this.keysetCounters.map(({ id, counter }) => [id, counter])
+        );
+        this.sharedCounterSource = createEphemeralCounterSource(initial);
+      }
+      return this.sharedCounterSource;
+    },
+    syncCounterToStorage(keysetId: string, next: number) {
+      const entry = this.keysetCounters.find((c) => c.id === keysetId);
+      if (entry) {
+        entry.counter = Math.max(entry.counter, next);
+      } else {
+        this.keysetCounters.push({ id: keysetId, counter: next });
+      }
+    },
+    keysetCounter(id: string): number {
+      return this.keysetCounters.find((c) => c.id === id)?.counter ?? 0;
+    },
+    async increaseKeysetCounter(id: string, by: number) {
+      const next = this.keysetCounter(id) + by;
+      const src = this.getOrCreateCounterSource();
+      await src.advanceToAtLeast(id, next);
+      this.syncCounterToStorage(id, next);
+    },
+    createWalletInstance(
+      storedMint: StoredMint,
+      url: string,
+      unit: string
+    ): Wallet {
+      const mints = useMintsStore();
       if (this.mnemonic == "") {
         this.mnemonic = generateMnemonic(wordlist);
       }
-      const mnemonic: string = this.mnemonic;
-      const bip39Seed = mnemonicToSeedSync(mnemonic);
-      const wallet = new CashuWallet(mint, {
-        keys: storedMint.keys,
-        keysets: unitKeysets,
-        mintInfo: storedMint.info,
-        bip39seed: bip39Seed,
-        unit: unit,
+      const bip39seed = mnemonicToSeedSync(this.mnemonic);
+      const wallet = new Wallet(url, {
+        unit,
+        bip39seed,
+        counterSource: this.getOrCreateCounterSource(),
+        // logger: new ConsoleLogger("debug"),
       });
+      wallet.on.countersReserved(({ keysetId, next }) => {
+        this.syncCounterToStorage(keysetId, next);
+      });
+      wallet.on.keychainUpdated(({ cache }) => {
+        const mint = mints.mints.find((m) => m.url === url);
+        if (!mint) return;
+
+        // Cashu TS repairs its short-lived wallet snapshot after a keyset
+        // rejection. Keep that repair for subsequent wallet instances too.
+        const { keysets, keys } = KeyChain.cacheToMintDTO(cache);
+        mint.keysets = [
+          ...mint.keysets.filter((existing) =>
+            keysets.every((updated) => updated.id !== existing.id)
+          ),
+          ...keysets,
+        ];
+        mint.keys = [
+          ...mint.keys.filter((existing) =>
+            keys.every((updated) => updated.id !== existing.id)
+          ),
+          ...keys,
+        ];
+      });
+      // Load the caches
+      const keychainCache = KeyChain.mintToCacheDTO(
+        url,
+        storedMint.keysets,
+        storedMint.keys
+      );
+      if (storedMint.info) {
+        wallet.loadMintFromCache(storedMint.info, keychainCache);
+      }
       return wallet;
     },
     mnemonicToSeedSync: function (mnemonic: string): Uint8Array {
@@ -219,24 +477,36 @@ export const useWalletStore = defineStore("wallet", {
       const keysetCounters = this.keysetCounters;
       oldMnemonicCounters.push({ mnemonic: this.mnemonic, keysetCounters });
       this.keysetCounters = [];
+      this.sharedCounterSource = null; // force re-creation on next wallet init
       this.mnemonic = generateMnemonic(wordlist);
     },
-    keysetCounter: function (id: string) {
-      const keysetCounter = this.keysetCounters.find((c) => c.id === id);
-      if (keysetCounter) {
-        return keysetCounter.counter;
-      } else {
-        this.keysetCounters.push({ id, counter: 1 });
-        return 1;
-      }
-    },
-    increaseKeysetCounter: function (id: string, by: number) {
-      const keysetCounter = this.keysetCounters.find((c) => c.id === id);
-      if (keysetCounter) {
-        keysetCounter.counter += by;
-      } else {
-        const newCounter = { id, counter: by } as KeysetCounter;
-        this.keysetCounters.push(newCounter);
+    retryOnceOnRecoverableError: async function <T>(
+      keysetId: string,
+      operation: () => Promise<T>,
+      notifyUser = true
+    ): Promise<T> {
+      try {
+        return await operation();
+      } catch (error: any) {
+        // Cashu TS v4.9.0+ refreshes the wallet snapshot when a mint rejects
+        // outputs on a retired keyset, then asks the caller to retry.
+        if (error instanceof StaleKeysetError && error.repaired) {
+          if (notifyUser) {
+            notify(this.t("wallet.notifications.trying_again"));
+          }
+          return await operation();
+        }
+        const handled = await this.handleOutputsHaveAlreadyBeenSignedError(
+          keysetId,
+          error,
+          notifyUser
+        );
+        if (!handled) {
+          throw error;
+        }
+        // Counter source is shared — the bump from handleOutputsHaveAlreadyBeenSignedError
+        // is already visible to the wallet, so just retry.
+        return await operation();
       }
     },
     getKeyset(
@@ -276,22 +546,56 @@ export const useWalletStore = defineStore("wallet", {
         console.error("no active keysets found for unit", unit);
         throw new Error("no active keysets found for unit");
       }
-      const keyset_id = sortedKeysets[0].id;
-      // const keys = mint.keys.find((k) => k.id === keyset_id);
-      // if (keys) {
-      //   this.wallet.keys = keys;
-      // }
-      return keyset_id;
+      return sortedKeysets[0].id;
     },
     /**
      * Sets an invoice status to paid
      */
-    setInvoicePaid(quoteId: string) {
+    async setInvoicePaid(
+      quoteId: string,
+      updates?: { amount?: number; mintQuote?: any }
+    ) {
       const invoice = this.invoiceHistory.find((i) => i.quote === quoteId);
       if (!invoice) return;
       invoice.status = "paid";
       invoice.paidDate = currentDateStr();
+      if (updates?.amount !== undefined) invoice.amount = updates.amount;
+      if (updates?.mintQuote) invoice.mintQuote = updates.mintQuote;
+
+      // Update invoiceData if it matches the paid invoice
+      if (this.invoiceData.quote === quoteId) {
+        this.invoiceData.status = "paid";
+        this.invoiceData.paidDate = invoice.paidDate;
+        if (updates?.amount !== undefined) {
+          this.invoiceData.amount = updates.amount;
+        }
+        if (updates?.mintQuote) this.invoiceData.mintQuote = updates.mintQuote;
+      }
+      try {
+        const paymentHistoryStore = usePaymentHistoryStore();
+        const paidDate = await paymentHistoryStore.setPaymentPaid(
+          quoteId,
+          updates
+        );
+        if (paidDate) {
+          this.syncPaymentHistoryCache();
+        }
+      } catch (error) {
+        console.error("Could not persist paid payment history", error);
+      }
     },
+
+    hideInvoiceDetailsAfterReceiveSuccess(
+      quoteId: string,
+      delayMs = RECEIVE_SUCCESS_HIDE_DELAY_MS
+    ) {
+      setTimeout(() => {
+        if (this.invoiceData?.quote === quoteId) {
+          useUiStore().showInvoiceDetails = false;
+        }
+      }, delayMs);
+    },
+
     splitAmount: function (value: number) {
       // returns optimal 2^n split
       const chunks: Array<number> = [];
@@ -303,44 +607,27 @@ export const useWalletStore = defineStore("wallet", {
       }
       return chunks;
     },
-    coinSelectSpendBase64: function (
-      proofs: WalletProof[],
-      amount: number
-    ): WalletProof[] {
-      const base64Proofs = proofs.filter((p) => !p.id.startsWith("00"));
-      if (base64Proofs.length > 0) {
-        base64Proofs.sort((a, b) => b.amount - a.amount);
-        let sum = 0;
-        let selectedProofs: WalletProof[] = [];
-        for (let i = 0; i < base64Proofs.length; i++) {
-          const proof = base64Proofs[i];
-          sum += proof.amount;
-          selectedProofs.push(proof);
-          if (sum >= amount) {
-            return selectedProofs;
-          }
-        }
-        return [];
-      }
-      return [];
-    },
     coinSelect: function (
       proofs: WalletProof[],
-      wallet: CashuWallet,
+      wallet: Wallet,
       amount: number,
       includeFees: boolean = false
     ): WalletProof[] {
-      if (proofs.reduce((s, t) => (s += t.amount), 0) < amount) {
+      if (sumProofAmounts(proofs) < amount) {
         // there are not enough proofs to pay the amount
         return [];
       }
       const { send: selectedProofs, keep: _ } = wallet.selectProofsToSend(
-        proofs,
+        toProofs(proofs),
         amount,
         includeFees
       );
       const selectedWalletProofs = selectedProofs.map((p) => {
-        return { ...p, reserved: false } as WalletProof;
+        return {
+          ...p,
+          amount: amountToNumber(p.amount),
+          reserved: false,
+        } as WalletProof;
       });
       return selectedWalletProofs;
     },
@@ -348,130 +635,176 @@ export const useWalletStore = defineStore("wallet", {
       proofs: WalletProof[],
       amount: number
     ): WalletProof[] {
-      const uIStore = useUiStore();
       const proofsStore = useProofsStore();
-      const mintStore = useMintsStore();
       const spendableProofs = proofsStore.getUnreservedProofs(proofs);
       if (proofsStore.sumProofs(spendableProofs) < amount) {
         throw Error(this.t("wallet.notifications.balance_too_low"));
       }
       return spendableProofs;
     },
-    getFeesForProofs: function (proofs: Proof[]): number {
-      return this.wallet.getFeesForProofs(proofs);
+    getFeesForProofs: function (
+      proofs: Array<Pick<ProofLike, "id">>,
+      mintUrl?: string,
+      unit?: string
+    ): number {
+      const mints = useMintsStore();
+      const wallet = this.mintWalletSync(
+        mintUrl ?? mints.activeMintUrl,
+        unit ?? mints.activeUnit
+      );
+      return amountToNumber(wallet.getFeesForProofs(proofs));
     },
     sendToLock: async function (
       proofs: WalletProof[],
-      wallet: CashuWallet,
+      wallet: Wallet,
       amount: number,
-      receiverPubkey: string
+      receiverPubkey: string | P2PKOptions,
+      mutexPriority: MutexPriority = "normal"
     ) {
-      const spendableProofs = this.spendableProofs(proofs, amount);
-      const proofsToSend = this.coinSelect(
-        spendableProofs,
-        wallet,
-        amount,
-        true
-      );
-      const keysetId = this.getKeyset(wallet.mint.mintUrl, wallet.unit);
-      const { keep: keepProofs, send: sendProofs } = await wallet.send(
-        amount,
-        proofsToSend,
-        { keysetId, pubkey: receiverPubkey }
-      );
-      const proofsStore = useProofsStore();
-      await proofsStore.removeProofs(proofsToSend);
-      // note: we do not store sendProofs in the proofs store but
-      // expect from the caller to store it in the history
-      await proofsStore.addProofs(keepProofs);
-      return { keepProofs, sendProofs };
-    },
-    send: async function (
-      proofs: WalletProof[],
-      wallet: CashuWallet,
-      amount: number,
-      invalidate: boolean = false,
-      includeFees: boolean = false
-    ): Promise<{ keepProofs: Proof[]; sendProofs: Proof[] }> {
-      /*
-      splits proofs so the user can keep firstProofs, send scndProofs.
-      then sets scndProofs as reserved.
-
-      if invalidate, scndProofs (the one to send) are invalidated
-      */
-      const proofsStore = useProofsStore();
-      const uIStore = useUiStore();
-      let proofsToSend: WalletProof[] = [];
-      const keysetId = this.getKeyset(wallet.mint.mintUrl, wallet.unit);
-      await uIStore.lockMutex();
+      // Accept a bare pubkey (manual lock flow) or a full P2PKOptions so a
+      // NUT-18 payment request can reproduce its requested NUT-10 condition
+      // (P2PK or HTLC). Going through the `.asP2PK()` builder keeps the
+      // blinding keyset-aware (for upcoming cashu-ts v5).
+      const uiStore = useUiStore();
+      const spendId = newSpendId();
+      await uiStore.lockMutex(mutexPriority);
       try {
+        await holdSpend(spendId, amount, wallet.unit);
+        const p2pkOptions: P2PKOptions =
+          typeof receiverPubkey === "string"
+            ? { pubkey: receiverPubkey }
+            : receiverPubkey;
         const spendableProofs = this.spendableProofs(proofs, amount);
-
-        proofsToSend = this.coinSelect(
+        const proofsToSend = this.coinSelect(
           spendableProofs,
           wallet,
           amount,
-          includeFees
+          true
         );
-        const totalAmount = proofsToSend.reduce((s, t) => (s += t.amount), 0);
-        const fees = includeFees ? wallet.getFeesForProofs(proofsToSend) : 0;
-        const targetAmount = amount + fees;
-
-        let keepProofs: Proof[] = [];
-        let sendProofs: Proof[] = [];
-
-        if (totalAmount != targetAmount) {
-          const counter = this.keysetCounter(keysetId);
-          proofsToSend = this.coinSelect(
-            spendableProofs,
-            wallet,
-            targetAmount,
-            true
+        const { keep: keepProofs, send: sendProofs } =
+          await this.retryOnceOnRecoverableError(wallet.keysetId, async () =>
+            wallet.ops
+              .send(amount, toProofs(proofsToSend))
+              .keyset(wallet.keysetId)
+              .asP2PK(p2pkOptions)
+              .run()
           );
-          ({ keep: keepProofs, send: sendProofs } = await wallet.send(
-            targetAmount,
-            proofsToSend,
-            { counter, keysetId, proofsWeHave: spendableProofs }
-          ));
-          this.increaseKeysetCounter(
-            keysetId,
-            keepProofs.length + sendProofs.length
+        const proofsStore = useProofsStore();
+        await proofsStore.removeProofs(proofsToSend);
+        // note: we do not store sendProofs in the proofs store but
+        // expect from the caller to store it in the history
+        await proofsStore.addProofs(keepProofs);
+        await settleSpend(spendId, proofsStore.sumProofs(sendProofs));
+        return { keepProofs, sendProofs };
+      } catch (error: any) {
+        await releaseSpend(spendId);
+        throw error;
+      } finally {
+        uiStore.unlockMutex();
+      }
+    },
+    send: async function (
+      proofs: WalletProof[],
+      wallet: Wallet,
+      amount: number,
+      invalidate: boolean = false,
+      includeFees: boolean = false,
+      mutexPriority: MutexPriority = "normal"
+    ): Promise<{ keepProofs: ProofLike[]; sendProofs: ProofLike[] }> {
+      // Returns sendProofs summing to `amount` (plus input fees when
+      // includeFees=true). Tries an offline exact-match first; otherwise
+      // swaps via the mint. Reserves sendProofs in proofsStore on success,
+      // or removes them if `invalidate` is true (caller takes ownership).
+      const proofsStore = useProofsStore();
+      const uIStore = useUiStore();
+      // invalidate means the proofs leave the wallet as a token. Melts come
+      // through here too, but hold their own spend in meltGeneric.
+      const spendId = invalidate ? newSpendId() : null;
+      await uIStore.lockMutex(mutexPriority);
+      try {
+        if (spendId) await holdSpend(spendId, amount, wallet.unit);
+        const spendableProofs: Proof[] = toProofs(
+          this.spendableProofs(proofs, amount)
+        );
+
+        let keepProofs: ProofLike[] = [];
+        let sendProofs: ProofLike[] = [];
+
+        // Try to avoid a swap by selecting an exact match. selectProofsToSend
+        // returns { send: [] } when no subset is found and throws if exact-match
+        // search exceeds MAX_TIMEMS. Fall through to swap in either case.
+        let exactMatch: ProofLike[] = [];
+        try {
+          exactMatch = wallet.selectProofsToSend(
+            spendableProofs,
+            amount,
+            includeFees,
+            true // exact match
+          ).send;
+        } catch {
+          // exact-match search timed out; the swap will handle it
+        }
+        if (exactMatch.length > 0) {
+          sendProofs = exactMatch;
+        } else {
+          // we need to swap!
+          // get a new wallet with potentially updated keysets / info
+          const swapWallet = await this.mintWallet(
+            wallet.mint.mintUrl,
+            wallet.unit,
+            true // update keysets
+          );
+          // includeFees=true inflates send outputs so sendProofs sum to
+          // amount + fees(sendProofs): required for melt and includeFees sends.
+          const swapResult = await this.retryOnceOnRecoverableError(
+            swapWallet.keysetId,
+            async () =>
+              swapWallet.ops
+                .send(amount, spendableProofs)
+                .asDeterministic()
+                .keyset(swapWallet.keysetId)
+                .proofsWeHave(spendableProofs)
+                .includeFees(includeFees)
+                .run()
+          );
+          // swapResult.keep mixes fresh proofs (new secrets) with any
+          // un-selected passthrough proofs (already in spendableProofs).
+          const spendableSecrets = new Set(
+            spendableProofs.map((p) => p.secret)
+          );
+          const returnedKeepSecrets = new Set(
+            swapResult.keep.map((k) => k.secret)
+          );
+          sendProofs = swapResult.send;
+          keepProofs = swapResult.keep.filter(
+            (k) => !spendableSecrets.has(k.secret)
+          );
+          const swappedProofs = spendableProofs.filter(
+            (p) => !returnedKeepSecrets.has(p.secret)
           );
           await proofsStore.addProofs(keepProofs);
           await proofsStore.addProofs(sendProofs);
-
-          // make sure we don't delete any proofs that were returned
-          const proofsToSendNotReturned = proofsToSend
-            .filter((p) => !sendProofs.find((s) => s.secret === p.secret))
-            .filter((p) => !keepProofs.find((k) => k.secret === p.secret));
-          await proofsStore.removeProofs(proofsToSendNotReturned);
-        } else if (totalAmount == targetAmount) {
-          keepProofs = [];
-          sendProofs = proofsToSend;
-        } else {
-          throw new Error("could not split proofs.");
+          await proofsStore.removeProofs(swappedProofs);
         }
-
-        await proofsStore.setReserved(sendProofs, true);
+        // Proofs are being sent externally, remove from store
         if (invalidate) {
           await proofsStore.removeProofs(sendProofs);
         }
+        // Finally, reserve sendProofs as nothing above threw.
+        await proofsStore.setReserved(sendProofs, true);
+        if (spendId) {
+          await settleSpend(spendId, proofsStore.sumProofs(sendProofs));
+        }
         return { keepProofs, sendProofs };
       } catch (error: any) {
-        await proofsStore.setReserved(proofsToSend, false);
         console.error(error);
+        if (spendId) await releaseSpend(spendId);
         notifyApiError(error);
-        this.handleOutputsHaveAlreadyBeenSignedError(keysetId, error);
         throw error;
       } finally {
         uIStore.unlockMutex();
       }
     },
-    /**
-     *
-     *
-     * @param {array} proofs
-     */
     redeem: async function () {
       /*
       Receives a token that is prepared in the receiveToken – it is not yet in the history
@@ -484,18 +817,20 @@ export const useWalletStore = defineStore("wallet", {
       if (receiveStore.receiveData.tokensBase64.length == 0) {
         throw new Error("no tokens provided.");
       }
-      const tokenJson = token.decode(receiveStore.receiveData.tokensBase64);
+      const tokenJson = await token.decodeFull(
+        receiveStore.receiveData.tokensBase64
+      );
       if (tokenJson == undefined) {
         throw new Error("no tokens provided.");
       }
-      let proofs = token.getProofs(tokenJson);
+      const proofs = token.getProofs(tokenJson);
       if (proofs.length == 0) {
         throw new Error("no proofs found.");
       }
-      const inputAmount = proofs.reduce((s, t) => (s += t.amount), 0);
+      const inputAmount = sumProofAmounts(proofs);
       let fee = 0;
-      let mintInToken = token.getMint(tokenJson);
-      let unitInToken = token.getUnit(tokenJson);
+      const mintInToken = token.getMint(tokenJson);
+      const unitInToken = token.getUnit(tokenJson);
 
       const historyToken = {
         amount: inputAmount,
@@ -504,7 +839,11 @@ export const useWalletStore = defineStore("wallet", {
         mint: mintInToken,
         fee: fee,
       };
-      const mintWallet = this.mintWallet(historyToken.mint, historyToken.unit);
+      const mintWallet = await this.mintWallet(
+        historyToken.mint,
+        historyToken.unit,
+        true
+      );
       const mint = mintStore.mints.find((m) => m.url === historyToken.mint);
       if (!mint) {
         throw new Error("mint not found");
@@ -512,43 +851,39 @@ export const useWalletStore = defineStore("wallet", {
       await uIStore.lockMutex();
       try {
         // redeem
-        const keysetId = this.getKeyset(historyToken.mint, historyToken.unit);
-        const counter = this.keysetCounter(keysetId);
         const privkey = receiveStore.receiveData.p2pkPrivateKey;
         let proofs: Proof[];
         try {
-          proofs = await mintWallet.receive(
-            receiveStore.receiveData.tokensBase64,
-            {
-              counter,
-              privkey,
-              proofsWeHave: mintStore.mintUnitProofs(mint, historyToken.unit),
-            }
+          proofs = await this.retryOnceOnRecoverableError(
+            mintWallet.keysetId,
+            async () =>
+              mintWallet.ops
+                .receive(receiveStore.receiveData.tokensBase64)
+                .asDeterministic()
+                .privkey(privkey)
+                .proofsWeHave(mintStore.mintUnitProofs(mint, historyToken.unit))
+                .run()
           );
           await proofsStore.addProofs(proofs);
-          this.increaseKeysetCounter(keysetId, proofs.length);
         } catch (error: any) {
           console.error(error);
-          this.handleOutputsHaveAlreadyBeenSignedError(keysetId, error);
           throw new Error("Error receiving tokens: " + error);
         }
 
         p2pkStore.setPrivateKeyUsed(privkey);
 
-        const outputAmount = proofs.reduce((s, t) => (s += t.amount), 0);
-        
-        // Automatically lock all newly received sats for educational app
-        // Kids need to earn sats through lessons
-        try {
-          const { useEducationStore } = await import("src/stores/education");
-          const educationStore = useEducationStore();
-          if (outputAmount > 0) {
-            educationStore.lockSats(outputAmount, `Received via ecash token`);
-            console.log(`[Wallet] ✓ Automatically locked ${outputAmount} sats from received ecash token`);
-          }
-        } catch (e) {
-          console.error("[Wallet] ✗ Could not auto-lock received sats:", e);
-          // Don't fail the receive operation if locking fails
+        const outputAmount = proofsStore.sumProofs(proofs);
+        // Claiming back an own pending token is not new money
+        const isReclaim = tokenStore.historyTokens.some(
+          (t) =>
+            t.token === receiveStore.receiveData.tokensBase64 &&
+            t.amount < 0 &&
+            t.status === "pending"
+        );
+        if (isReclaim) {
+          await refundSpend(outputAmount, historyToken.unit);
+        } else {
+          await autoLockSats(outputAmount, "Received via ecash token");
         }
 
         // if token is already in history, set to paid, else add to history
@@ -573,7 +908,7 @@ export const useWalletStore = defineStore("wallet", {
           fee = inputAmount - outputAmount;
           historyToken.fee = fee;
           historyToken.amount = outputAmount;
-          const _historyId = tokenStore.addPaidToken(historyToken as any);
+          tokenStore.addPaidToken(historyToken);
         }
         useUiStore().vibrate();
         let message = this.t("wallet.notifications.received", {
@@ -599,396 +934,85 @@ export const useWalletStore = defineStore("wallet", {
       // }
     },
 
-    // /mint
-    /**
-     * Ask the mint to generate an invoice for the given amount
-     * Upon paying the request, the mint will credit the wallet with
-     * cashu tokens
-     */
-    requestMint: async function (
-      amount: number,
-      mintWallet: CashuWallet
-    ): Promise<MintQuoteResponse> {
-      try {
-        const { supported: nut20supported } = (
-          await mintWallet.lazyGetMintInfo()
-        ).isSupported(20);
-        const privkey = nut20supported
-          ? bytesToHex(nobleSecp256k1.utils.randomPrivateKey())
-          : undefined;
-        const pubkey = nut20supported
-          ? bytesToHex(nobleSecp256k1.getPublicKey(privkey!!, true))
-          : undefined;
-        const payload: MintQuotePayload = {
-          amount: amount,
-          unit: mintWallet.unit,
-          pubkey: pubkey,
-        };
-        const data = await mintWallet.mint.createMintQuote(payload);
-        this.invoiceData.amount = amount;
-        this.invoiceData.bolt11 = data.request;
-        this.invoiceData.quote = data.quote;
-        this.invoiceData.date = currentDateStr();
-        this.invoiceData.status = "pending";
-        this.invoiceData.mint = mintWallet.mint.mintUrl;
-        this.invoiceData.unit = mintWallet.unit;
-        this.invoiceData.mintQuote = data as MintQuoteResponse;
-        this.invoiceData.privKey = privkey;
-        this.invoiceHistory.push({
-          ...this.invoiceData,
-        });
-        return data as MintQuoteResponse;
-      } catch (error: any) {
-        console.error(error);
-        notifyApiError(
-          error,
-          this.t("wallet.notifications.could_not_request_mint")
-        );
-        throw error;
-      } finally {
-      }
-    },
-    mint: async function (invoice: InvoiceHistory, verbose: boolean = true) {
-      const proofsStore = useProofsStore();
-      const mintStore = useMintsStore();
-      const uIStore = useUiStore();
-      const keysetId = this.getKeyset(invoice.mint, invoice.unit);
-      const mintWallet = this.mintWallet(invoice.mint, invoice.unit);
-      const mint = mintStore.mints.find((m) => m.url === invoice.mint);
-      if (!mint) {
-        throw new Error("mint not found");
-      }
-
-      await uIStore.lockMutex();
-      try {
-        // first we check if the mint quote is paid
-        const mintQuote = await mintWallet.checkMintQuote(invoice.quote);
-        invoice.mintQuote = mintQuote as MintQuoteResponse;
-        console.log("### mint(): mintQuote", mintQuote);
-        switch (mintQuote.state) {
-          case MintQuoteState.PAID:
-            break;
-          case MintQuoteState.UNPAID:
-            if (verbose) {
-              notify(this.t("wallet.notifications.invoice_still_pending"));
-            }
-            throw new Error("invoice pending.");
-          case MintQuoteState.ISSUED:
-            throw new Error("invoice already issued.");
-          default:
-            throw new Error("unknown state.");
-        }
-        // MintQuoteState must be PAID
-        const counter = this.keysetCounter(keysetId);
-        const proofs = await mintWallet.mintProofs(
-          invoice.amount,
-          invoice.mintQuote!!,
-          {
-            keysetId,
-            counter,
-            proofsWeHave: mintStore.mintUnitProofs(mint, invoice.unit),
-            privateKey: invoice.privKey as string,
-          }
-        );
-        this.increaseKeysetCounter(keysetId, proofs.length);
-        await proofsStore.addProofs(proofs);
-        
-        // Automatically lock all newly minted sats from lightning invoice
-        // Kids need to earn sats through lessons
-        try {
-          const { useEducationStore } = await import("src/stores/education");
-          const educationStore = useEducationStore();
-          const mintedAmount = proofs.reduce((s, t) => (s += t.amount), 0);
-          if (mintedAmount > 0) {
-            educationStore.lockSats(mintedAmount, `Minted from Lightning invoice: ${invoice.memo || invoice.quote}`);
-            console.log(`[Wallet] ✓ Automatically locked ${mintedAmount} sats from Lightning invoice`);
-          }
-        } catch (e) {
-          console.error("[Wallet] ✗ Could not auto-lock minted sats:", e);
-          // Don't fail the mint operation if locking fails
-        }
-
-        // update UI
-        this.setInvoicePaid(invoice.quote);
-        useInvoicesWorkerStore().removeInvoiceFromChecker(invoice.quote);
-
-        return proofs;
-      } catch (error: any) {
-        console.error(error);
-        if (verbose) {
-          notifyApiError(error);
-        }
-        this.handleOutputsHaveAlreadyBeenSignedError(keysetId, error);
-        throw error;
-      } finally {
-        uIStore.unlockMutex();
-      }
-    },
-    // get a melt quote for the current invoice data
+    // Minting and melting
+    requestMint: requestMintBolt11,
+    mint: mintBolt11,
+    // Dispatch to Bolt11 or Bolt12 depending on parsed input
     meltQuoteInvoiceData: async function () {
-      // choose active wallet with active mint and unit
-      const mintWallet = this.wallet;
-      // throw an error if this.payInvoiceData.blocking is true
-      if (this.payInvoiceData.blocking) {
-        throw new Error("already processing an melt quote.");
-      }
-      this.payInvoiceData.blocking = true;
-      this.payInvoiceData.meltQuote.error = "";
-      try {
-        const mintStore = useMintsStore();
-        if (this.payInvoiceData.input.request == "") {
-          throw new Error("no invoice provided.");
-        }
-        const payload: MeltQuotePayload = {
-          unit: mintStore.activeUnit,
-          request: this.payInvoiceData.input.request,
-        };
-        this.payInvoiceData.meltQuote.payload = payload;
-        const data = await this.meltQuote(mintWallet, payload.request);
-        mintStore.assertMintError(data);
-        this.payInvoiceData.meltQuote.response = data;
-        return data;
-      } catch (error: any) {
-        this.payInvoiceData.meltQuote.error = error;
-        console.error(error);
-        notifyApiError(error);
-        throw error;
-      } finally {
-        this.payInvoiceData.blocking = false;
-      }
-    },
-    meltQuote: async function (
-      wallet: CashuWallet,
-      request: string,
-      mpp_amount: number | undefined = undefined
-    ): Promise<MeltQuoteResponse> {
-      const mintStore = useMintsStore();
-      let data;
-      if (mpp_amount) {
-        data = await wallet.createMultiPathMeltQuote(
-          request,
-          mpp_amount * 1000
-        );
-      } else {
-        data = await wallet.createMeltQuote(request);
-      }
-
-      mintStore.assertMintError(data);
-      return data;
-    },
-    meltInvoiceData: async function (silent?: boolean) {
-      if (this.payInvoiceData.invoice == null) {
-        throw new Error("no invoice provided.");
-      }
-      const quote = this.payInvoiceData.meltQuote.response;
-      if (quote == null) {
-        throw new Error("no quote found.");
-      }
-      const request = this.payInvoiceData.invoice.bolt11;
       if (
-        this.invoiceHistory.find(
-          (i) => i.bolt11 === request && i.amount < 0 && i.status === "paid"
-        )
+        this.payInvoiceData?.invoice &&
+        (this.payInvoiceData.invoice as any).onchain
       ) {
-        notifyError("Invoice already paid.");
-        throw new Error("invoice already paid.");
+        return await meltQuoteInvoiceDataOnchain.call(this);
+      } else if (
+        this.payInvoiceData?.invoice &&
+        (this.payInvoiceData.invoice as any).bolt12
+      ) {
+        return await meltQuoteInvoiceDataBolt12.call(this);
+      } else {
+        return await meltQuoteInvoiceDataBolt11.call(this);
       }
-
-      const mintStore = useMintsStore();
-      const mintWallet = this.mintWallet(
-        mintStore.activeMintUrl,
-        mintStore.activeUnit
-      );
-      return await this.melt(mintStore.activeProofs, quote, mintWallet, silent);
     },
-    melt: async function (
-      proofs: WalletProof[],
-      quote: MeltQuoteResponse,
-      mintWallet: CashuWallet,
+    meltQuote: meltQuoteBolt11,
+    meltInvoiceData: async function (
       silent?: boolean,
-      releaseMutex?: boolean
+      mutexPriority: MutexPriority = "normal"
     ) {
-      const uIStore = useUiStore();
-      const proofsStore = useProofsStore();
-
-      console.log("#### melt()");
-      const amount = quote.amount + quote.fee_reserve;
-      let countChangeOutputs = 0;
-      const keysetId = this.getKeyset(mintWallet.mint.mintUrl, mintWallet.unit);
-      let keysetCounterIncrease = 0;
-
-      // start melt
-      let sendProofs: Proof[] = [];
-      try {
-        const { keepProofs: keepProofs, sendProofs: _sendProofs } =
-          await this.send(proofs, mintWallet, amount, false, true);
-        sendProofs = _sendProofs;
-        if (sendProofs.length == 0) {
-          throw new Error("could not split proofs.");
-        }
-      } catch (error: any) {
-        console.error(error);
-        if (!silent) notifyApiError(error, "Payment failed");
-        throw error;
-      }
-
-      await uIStore.lockMutex();
-      try {
-        await this.addOutgoingPendingInvoiceToHistory(
-          quote,
-          mintWallet.mint.mintUrl,
-          mintWallet.unit
-        );
-        await proofsStore.setReserved(sendProofs, true, quote.quote);
-
-        // NUT-08 blank outputs for change
-        const counter = this.keysetCounter(keysetId);
-
-        // QUIRK: we increase the keyset counter by sendProofs and the maximum number of possible change outputs
-        // this way, in case the user exits the app before meltProofs is completed, the returned change outputs won't cause a "outputs already signed" error
-        // if the payment fails, we decrease the counter again
-        this.increaseKeysetCounter(keysetId, sendProofs.length);
-        if (quote.fee_reserve > 0) {
-          countChangeOutputs = Math.ceil(Math.log2(quote.fee_reserve)) || 1;
-          this.increaseKeysetCounter(keysetId, countChangeOutputs);
-          keysetCounterIncrease += countChangeOutputs;
-        }
-
-        uIStore.triggerActivityOrb();
-
-        // NOTE: if the user exits the app while we're in the API call, JS will emit an error that we would catch below!
-        // We have to handle that case in the catch block below
-        if (releaseMutex) uIStore.unlockMutex(); // Momentarely release the mutex (needed for concurrent melts)
-        let data;
-        try {
-          data = await mintWallet.meltProofs(quote, sendProofs, {
-            keysetId,
-            counter,
-          });
-          // store melt quote in invoice history
-          this.updateOutgoingInvoiceInHistory(data.quote as MeltQuoteResponse);
-        } catch (error) {
-          throw error;
-        } finally {
-          if (releaseMutex) await uIStore.lockMutex();
-        }
-
-        if (data.quote.state != MeltQuoteState.PAID) {
-          throw new Error("Invoice not paid.");
-        }
-
-        // NUT-08 get change
-        if (data.change != null) {
-          const changeProofs = data.change;
-          const changeAmount = proofsStore.sumProofs(changeProofs);
-          console.log(
-            "## Received change: " + changeAmount
-          );
-          await proofsStore.addProofs(changeProofs);
-          
-          // Automatically lock change sats
-          // Kids need to earn sats through lessons
-          try {
-            const { useEducationStore } = await import("src/stores/education");
-            const educationStore = useEducationStore();
-            if (changeAmount > 0) {
-              educationStore.lockSats(changeAmount, `Change from sending token`);
-              console.log(`[Wallet] ✓ Automatically locked ${changeAmount} sats from change`);
-            }
-          } catch (e) {
-            console.error("[Wallet] ✗ Could not auto-lock change sats:", e);
-            // Don't fail the payment if locking fails
-          }
-        }
-
-        // delete spent tokens from db
-        await proofsStore.removeProofs(sendProofs);
-
-        let amount_paid = amount - proofsStore.sumProofs(data.change);
-        useUiStore().vibrate();
-        if (!silent) {
-          notifySuccess(
-            this.t("wallet.notifications.paid_lightning", {
-              amount: uIStore.formatCurrency(amount_paid, mintWallet.unit),
-            })
-          );
-        }
-        console.log(
-          `#### pay lightning: ${amount_paid} ${mintWallet.unit} paid`
-        );
-
-        this.updateOutgoingInvoiceInHistory(quote, {
-          status: "paid",
-          amount: -amount_paid,
-        });
-
-        this.payInvoiceData.invoice = { sat: 0, memo: "", bolt11: "" };
-        this.payInvoiceData.show = false;
-        return data;
-      } catch (error: any) {
-        if (isUnloading) {
-          // NOTE: An error is thrown when the user exits the app while the payment is in progress.
-          // do not handle the error if the user exits the app
-          throw error;
-        }
-        // get quote and check state
-        const meltQuote = await mintWallet.mint.checkMeltQuote(quote.quote);
-        // store melt quote in invoice history
-        this.updateOutgoingInvoiceInHistory(meltQuote as MeltQuoteResponse);
-
-        if (
-          meltQuote.state == MeltQuoteState.PAID ||
-          meltQuote.state == MeltQuoteState.PENDING
-        ) {
-          console.log(
-            "### melt: error, but quote is paid or pending. not rolling back."
-          );
-          this.payInvoiceData.show = false;
-          notify(this.t("wallet.notifications.payment_pending_refresh"));
-          throw error;
-        }
-
-        // roll back proof management and keyset counter
-        await proofsStore.setReserved(sendProofs, false);
-        this.increaseKeysetCounter(keysetId, -keysetCounterIncrease);
-        this.removeOutgoingInvoiceFromHistory(quote.quote);
-
-        console.error(error);
-        this.handleOutputsHaveAlreadyBeenSignedError(keysetId, error);
-        if (!silent) notifyApiError(error, "Payment failed");
-        throw error;
-      } finally {
-        uIStore.unlockMutex();
+      if (
+        this.payInvoiceData?.invoice &&
+        (this.payInvoiceData.invoice as any).onchain
+      ) {
+        return await meltInvoiceDataOnchain.call(this, silent, mutexPriority);
+      } else if (
+        this.payInvoiceData?.invoice &&
+        (this.payInvoiceData.invoice as any).bolt12
+      ) {
+        return await meltInvoiceDataBolt12.call(this, silent, mutexPriority);
+      } else {
+        return await meltInvoiceDataBolt11.call(this, silent, mutexPriority);
       }
     },
+    meltGeneric: meltGeneric,
+    melt: meltBolt11,
+
+    // Alias functions for bolt11 compatibility
+    requestMintBolt11: requestMintBolt11,
+    mintBolt11: mintBolt11,
+    meltQuoteInvoiceDataBolt11: meltQuoteInvoiceDataBolt11,
+    meltQuoteBolt11: meltQuoteBolt11,
+    meltInvoiceDataBolt11: meltInvoiceDataBolt11,
+    meltBolt11: meltBolt11,
+    // Bolt12 explicit aliases
+    requestMintBolt12: requestMintBolt12,
+    meltQuoteInvoiceDataBolt12: meltQuoteInvoiceDataBolt12,
+    meltInvoiceDataBolt12: meltInvoiceDataBolt12,
+    meltBolt12: meltBolt12,
+    mintOnPaidBolt12: mintOnPaidBolt12,
+    // On-chain explicit aliases
+    requestMintOnchain: requestMintOnchain,
+    meltQuoteInvoiceDataOnchain: meltQuoteInvoiceDataOnchain,
+    meltInvoiceDataOnchain: meltInvoiceDataOnchain,
+    meltOnchain: meltOnchain,
+    mintOnPaidOnchain: mintOnPaidOnchain,
     // /check
     checkProofsSpendable: async function (
-      proofs: Proof[],
-      wallet: CashuWallet,
+      proofs: WalletProof[],
+      wallet: Wallet,
       update_history = false
     ) {
       /*
       checks with the mint whether an array of proofs is still
       spendable or already invalidated
       */
-      const mintStore = useMintsStore();
       const uIStore = useUiStore();
       const proofsStore = useProofsStore();
       const tokenStore = useTokensStore();
       if (proofs.length == 0) {
         return;
       }
-      const enc = new TextEncoder();
       try {
-        uIStore.triggerActivityOrb();
-        const proofStates = await wallet.checkProofsStates(proofs);
-        const spentProofsStates = proofStates.filter(
-          (p) => p.state == CheckStateEnum.SPENT
-        );
-        const spentProofs = proofs.filter((p) =>
-          spentProofsStates.find(
-            (s) => s.Y == hashToCurve(enc.encode(p.secret)).toHex(true)
-          )
+        const { spent: spentProofs } = await wallet.groupProofsByState(
+          toProofs(proofs)
         );
         if (spentProofs.length) {
           await proofsStore.removeProofs(spentProofs);
@@ -998,7 +1022,7 @@ export const useWalletStore = defineStore("wallet", {
             throw new Error("could not serialize proofs.");
           }
           if (update_history) {
-            const _historyId = tokenStore.addPaidToken({
+            tokenStore.addPaidToken({
               amount: -proofsStore.sumProofs(spentProofs),
               token: serializedProofs,
               unit: wallet.unit,
@@ -1027,12 +1051,15 @@ export const useWalletStore = defineStore("wallet", {
       const tokenStore = useTokensStore();
       const proofsStore = useProofsStore();
 
-      const tokenJson = token.decode(historyToken.token);
+      const tokenJson = await token.decodeFull(historyToken.token);
       if (tokenJson == undefined) {
         throw new Error("no tokens provided.");
       }
       const proofs = token.getProofs(tokenJson);
-      const mintWallet = this.mintWallet(historyToken.mint, historyToken.unit);
+      const mintWallet = await this.mintWallet(
+        historyToken.mint,
+        historyToken.unit
+      );
 
       const mint = mintStore.mints.find((m) => m.url === historyToken.mint);
       if (!mint) {
@@ -1098,119 +1125,69 @@ export const useWalletStore = defineStore("wallet", {
       }
       return true;
     },
-    checkInvoice: async function (
+    checkInvoiceBolt11: async function (
       quote: string,
       verbose = true,
       hideInvoiceDetailsOnMint = true
     ) {
-      const uIStore = useUiStore();
-      uIStore.triggerActivityOrb();
-      const mintStore = useMintsStore();
-      const invoice = this.invoiceHistory.find((i) => i.quote === quote);
-      if (!invoice) {
-        throw new Error("invoice not found");
-      }
-      const mintWallet = this.mintWallet(invoice.mint, invoice.unit);
-      const mint = mintStore.mints.find((m) => m.url === invoice.mint);
-      if (!mint) {
-        throw new Error("mint not found");
-      }
-      try {
-        // check the state first
-        const state = (await mintWallet.checkMintQuote(quote)).state;
-        if (state == MintQuoteState.ISSUED) {
-          this.setInvoicePaid(quote);
-          return;
-        }
-        if (state != MintQuoteState.PAID) {
-          console.log("### mintQuote not paid yet");
-          if (verbose) {
-            notify(this.t("wallet.notifications.invoice_still_pending"));
-          }
-          throw new Error(`invoice state not paid: ${state}`);
-        }
-        const proofs = await this.mint(invoice, verbose);
-        if (hideInvoiceDetailsOnMint) {
-          uIStore.showInvoiceDetails = false;
-        }
-        useUiStore().vibrate();
-        notifySuccess(
-          this.t("wallet.notifications.received_lightning", {
-            amount: uIStore.formatCurrency(invoice.amount, invoice.unit),
-          })
-        );
-        return proofs;
-      } catch (error) {
-        // if (verbose) {
-        //   notify("Invoice still pending");
-        // }
-        console.log("Invoice still pending", invoice.quote);
-        throw error;
-      }
+      return await checkInvoiceBolt11.call(
+        this,
+        quote,
+        verbose,
+        hideInvoiceDetailsOnMint
+      );
+    },
+    checkOutgoingInvoiceGeneric: checkOutgoingInvoiceGeneric,
+    finalizePaidMeltInvoice: finalizePaidMeltInvoice,
+    checkOutgoingInvoiceBolt11: async function (quote: string, verbose = true) {
+      return await checkOutgoingInvoiceBolt11.call(this, quote, verbose);
+    },
+    checkOutgoingInvoiceBolt12: async function (quote: string, verbose = true) {
+      return await checkOutgoingInvoiceBolt12.call(this, quote, verbose);
+    },
+    checkOutgoingOnchain: async function (quote: string, verbose = true) {
+      return await checkOutgoingOnchain.call(this, quote, verbose);
     },
     checkOutgoingInvoice: async function (quote: string, verbose = true) {
-      const uIStore = useUiStore();
-      const mintStore = useMintsStore();
       const invoice = this.invoiceHistory.find((i) => i.quote === quote);
       if (!invoice) {
         throw new Error("invoice not found");
       }
-      const mintWallet = this.mintWallet(invoice.mint, invoice.unit);
-      const mint = mintStore.mints.find((m) => m.url === invoice.mint);
-      if (!mint) {
-        throw new Error("mint not found");
+      if (invoice.type === PaymentMethod.Onchain) {
+        return await this.checkOutgoingOnchain(quote, verbose);
       }
-      const proofs: Proof[] = await proofsStore.getProofsForQuote(quote);
-      try {
-        // this is an outgoing invoice, we first do a getMintQuote to check if the invoice is paid
-        const meltQuote = await mintWallet.mint.checkMeltQuote(quote);
-        this.updateOutgoingInvoiceInHistory(meltQuote as MeltQuoteResponse);
-        if (meltQuote.state == MeltQuoteState.PENDING) {
-          console.log("### mintQuote not paid yet");
-          if (verbose) {
-            notify(this.t("wallet.notifications.invoice_still_pending"));
-          }
-          throw new Error("invoice not paid yet.");
-        } else if (meltQuote.state == MeltQuoteState.UNPAID) {
-          // we assume that the payment failed and we unset the proofs as reserved
-          await useProofsStore().setReserved(proofs, false);
-          this.removeOutgoingInvoiceFromHistory(quote);
-          notifyWarning(
-            this.t("wallet.notifications.lightning_payment_failed")
-          );
-        } else if (meltQuote.state == MeltQuoteState.PAID) {
-          // if the invoice is paid, we check if all proofs are spent and if so, we invalidate them and set the invoice state in the history to "paid"
-          const spentProofs = await this.checkProofsSpendable(
-            proofs,
-            mintWallet,
-            true
-          );
-          if (spentProofs != undefined && spentProofs.length == proofs.length) {
-            useUiStore().vibrate();
-            notifySuccess(
-              this.t("wallet.notifications.sent", {
-                amount: uIStore.formatCurrency(
-                  useProofsStore().sumProofs(proofs),
-                  invoice.unit
-                ),
-              })
-            );
-          }
-          // set invoice in history to paid
-          this.setInvoicePaid(quote);
-        }
-      } catch (error: any) {
-        if (verbose) {
-          notifyApiError(error);
-        }
-        console.log("Could not check quote", invoice.quote, error);
-        throw error;
+      if (invoice.type === PaymentMethod.Bolt12) {
+        return await this.checkOutgoingInvoiceBolt12(quote, verbose);
       }
+      return await this.checkOutgoingInvoiceBolt11(quote, verbose);
+    },
+    checkOfferAndMintBolt12: async function (
+      quote: string,
+      verbose = true,
+      hideInvoiceDetailsOnMint = true
+    ) {
+      return await checkOfferAndMintBolt12.call(
+        this,
+        quote,
+        verbose,
+        hideInvoiceDetailsOnMint
+      );
+    },
+    checkOnchainAndMint: async function (
+      quote: string,
+      verbose = true,
+      hideInvoiceDetailsOnMint = true
+    ) {
+      return await checkOnchainAndMint.call(
+        this,
+        quote,
+        verbose,
+        hideInvoiceDetailsOnMint
+      );
     },
     onTokenPaid: async function (historyToken: HistoryToken) {
       const sendTokensStore = useSendTokensStore();
       const uIStore = useUiStore();
-      const tokenJson = token.decode(historyToken.token);
       const mintStore = useMintsStore();
       const settingsStore = useSettingsStore();
       if (!settingsStore.checkSentTokens) {
@@ -1219,6 +1196,10 @@ export const useWalletStore = defineStore("wallet", {
         );
         return;
       }
+      useTransactionWorkerStore().addOutgoingTokenToChecker?.(
+        historyToken.token,
+        true
+      );
       const mint = mintStore.mints.find((m) => m.url === historyToken.mint);
       if (!mint) {
         throw new Error("mint not found");
@@ -1228,155 +1209,114 @@ export const useWalletStore = defineStore("wallet", {
         !mint.info?.nuts[17]?.supported ||
         !mint.info?.nuts[17]?.supported.find(
           (s) =>
-            s.method == "bolt11" &&
+            s.method === PaymentMethod.Bolt11 &&
             s.unit == historyToken.unit &&
             s.commands.indexOf("proof_state") != -1
         )
       ) {
         console.log(
-          "Websockets not supported, kicking off token check worker."
+          "Websockets not supported; the transaction worker will continue checking the token."
         );
-        useWorkersStore().checkTokenSpendableWorker(historyToken);
         return;
       }
+
+      const subscriptionKey = historyToken.token;
+      if (activeSentTokenSubscriptions.has(subscriptionKey)) {
+        console.log("Proof-state listener already active for sent token.");
+        return;
+      }
+      activeSentTokenSubscriptions.add(subscriptionKey);
+
+      let unsubscribe: (() => void) | undefined;
+      let cleanupRequested = false;
+      const cleanup = () => {
+        if (unsubscribe) {
+          unsubscribe();
+        } else {
+          cleanupRequested = true;
+        }
+        activeSentTokenSubscriptions.delete(subscriptionKey);
+      };
+
       try {
         console.log("onTokenPaid kicking off websocket");
+        const tokenJson = await token.decodeFull(historyToken.token);
         if (tokenJson == undefined) {
           throw new Error("no tokens provided.");
         }
         const proofs = token.getProofs(tokenJson);
         const oneProof = [proofs[0]];
         this.activeWebsocketConnections++;
-        uIStore.triggerActivityOrb();
-        const unsub = await this.wallet.onProofStateUpdates(
-          oneProof,
-          async (proofState: ProofState) => {
+        const wallet = await this.mintWallet(
+          historyToken.mint,
+          historyToken.unit
+        );
+        let proofCheckInProgress = false;
+        unsubscribe = await wallet.on.proofStateUpdates(
+          toProofs(oneProof),
+          async (proofState: ProofState & { proof: Proof }) => {
             console.log(`Websocket: proof state updated: ${proofState.state}`);
-            if (proofState.state == CheckStateEnum.SPENT) {
-              const tokenSpent = await this.checkTokenSpendable(historyToken);
-              if (tokenSpent) {
-                sendTokensStore.showSendTokens = false;
-                unsub();
+            if (
+              proofState.state == CheckStateEnum.SPENT &&
+              !proofCheckInProgress
+            ) {
+              proofCheckInProgress = true;
+              try {
+                const tokenSpent = await this.checkTokenSpendable(historyToken);
+                if (tokenSpent) {
+                  sendTokensStore.showSendTokens = false;
+                  cleanup();
+                }
+              } finally {
+                proofCheckInProgress = false;
               }
             }
           },
           async (error: any) => {
+            cleanup();
             console.error(error);
             notifyApiError(error);
             throw error;
           }
         );
+        if (cleanupRequested) {
+          cleanup();
+        }
       } catch (error) {
+        cleanup();
         console.error(
-          "Error in websocket subscription. Starting invoices worker.",
+          "Error in websocket subscription. The transaction worker remains active.",
           error
         );
-        useWorkersStore().checkTokenSpendableWorker(historyToken);
       } finally {
         this.activeWebsocketConnections--;
       }
     },
-    mintOnPaid: async function (
+    mintOnPaid: mintOnPaidBolt11,
+    mintOnPaidBolt11: async function (
       quote: string,
       verbose = true,
       kickOffInvoiceChecker = true,
       hideInvoiceDetailsOnMint = true
     ) {
-      const mintStore = useMintsStore();
-      const settingsStore = useSettingsStore();
-      if (!settingsStore.checkIncomingInvoices) {
-        console.log(
-          "settingsStore.checkIncomingInvoices is disabled, skipping invoice check"
-        );
-        return;
-      }
-      const invoice = this.invoiceHistory.find((i) => i.quote === quote);
-      if (!invoice) {
-        throw new Error("invoice not found");
-      }
-      const mintWallet = this.mintWallet(invoice.mint, invoice.unit);
-      const mint = mintStore.mints.find((m) => m.url === invoice.mint);
-
-      if (!mint) {
-        throw new Error("mint not found");
-      }
-      // add to checker before we try a websocket
-      if (kickOffInvoiceChecker) {
-        if (useSettingsStore().periodicallyCheckIncomingInvoices) {
-          console.log(`Adding quote ${quote} to long-polling checker.`);
-          useInvoicesWorkerStore().addInvoiceToChecker(quote);
-        } else if (useSettingsStore().checkIncomingInvoices) {
-          console.log(`Adding quote ${quote} to old worker checker.`);
-          useWorkersStore().invoiceCheckWorker(quote);
-        }
-      }
-
-      if (
-        !settingsStore.useWebsockets ||
-        !mint.info?.nuts[17]?.supported ||
-        !mint.info?.nuts[17]?.supported.find(
-          (s) =>
-            s.method == "bolt11" &&
-            s.unit == invoice.unit &&
-            s.commands.indexOf("bolt11_mint_quote") != -1
-        )
-      ) {
-        console.log("Websockets not supported.");
-        return;
-      }
-      const uIStore = useUiStore();
-      try {
-        this.activeWebsocketConnections++;
-        uIStore.triggerActivityOrb();
-        const unsub = await mintWallet.onMintQuotePaid(
-          quote,
-          async (mintQuoteResponse: MintQuoteResponse) => {
-            console.log("Websocket: mint quote paid.");
-            let proofs;
-            try {
-              proofs = await this.mint(invoice, false);
-            } catch (error: any) {
-              console.error(error);
-              // notifyApiError(error);
-              throw error;
-            }
-
-            if (hideInvoiceDetailsOnMint) {
-              uIStore.showInvoiceDetails = false;
-            }
-            useUiStore().vibrate();
-            notifySuccess(
-              this.t("wallet.notifications.received_lightning", {
-                amount: uIStore.formatCurrency(invoice.amount, invoice.unit),
-              })
-            );
-            unsub();
-            return proofs;
-          },
-          async (error: any) => {
-            if (verbose) {
-              notifyApiError(error);
-            }
-            console.log("Invoice still pending", invoice.quote);
-            throw error;
-          }
-        );
-      } catch (error) {
-        console.log("Error in websocket subscription", error);
-      } finally {
-        this.activeWebsocketConnections--;
-      }
+      return await mintOnPaidBolt11.call(
+        this,
+        quote,
+        verbose,
+        kickOffInvoiceChecker,
+        hideInvoiceDetailsOnMint
+      );
     },
     ////////////// UI HELPERS //////////////
     addOutgoingPendingInvoiceToHistory: async function (
-      quote: MeltQuoteResponse,
+      quote: AppMeltQuote,
       mint: string,
-      unit: string
+      unit: string,
+      method: PaymentMethod = PaymentMethod.Bolt11
     ) {
-      const mintStore = useMintsStore();
-      this.invoiceHistory.push({
+      const invoice = {
         amount: -(quote.amount + quote.fee_reserve),
-        bolt11: this.payInvoiceData.input.request,
+        request: this.payInvoiceData.input.request,
         quote: quote.quote,
         memo: "Outgoing invoice",
         date: currentDateStr(),
@@ -1384,16 +1324,42 @@ export const useWalletStore = defineStore("wallet", {
         mint: mint,
         unit: unit,
         meltQuote: quote,
-      });
+        type: method,
+        network:
+          method === PaymentMethod.Onchain
+            ? onchainNetwork(this.payInvoiceData.input.request || quote.request)
+            : undefined,
+      };
+      this.invoiceHistory.push(invoice);
+      try {
+        await usePaymentHistoryStore().addPayment(invoice);
+        this.syncPaymentHistoryCache();
+      } catch (error) {
+        console.error("Could not persist outgoing payment history", error);
+      }
+      useTransactionWorkerStore().addOutgoingInvoiceToChecker?.(
+        quote.quote,
+        true
+      );
     },
-    removeOutgoingInvoiceFromHistory: function (quote: string) {
+    removeOutgoingInvoiceFromHistory: async function (quote: string) {
       const index = this.invoiceHistory.findIndex((i) => i.quote === quote);
       if (index >= 0) {
         this.invoiceHistory.splice(index, 1);
       }
+      try {
+        const updated = await usePaymentHistoryStore().removePaymentByQuote(
+          quote
+        );
+        if (updated) {
+          this.syncPaymentHistoryCache();
+        }
+      } catch (error) {
+        console.error("Could not remove payment history", error);
+      }
     },
-    updateOutgoingInvoiceInHistory: function (
-      quote: MeltQuoteResponse,
+    updateOutgoingInvoiceInHistory: async function (
+      quote: AppMeltQuote,
       options?: { status?: "pending" | "paid"; amount?: number }
     ) {
       this.invoiceHistory
@@ -1406,13 +1372,41 @@ export const useWalletStore = defineStore("wallet", {
                 i.paidDate = currentDateStr();
               }
             }
-            if (options.amount) {
+            if (options.amount !== undefined) {
               i.amount = options.amount;
             }
-            i.meltQuote = quote;
+          }
+          i.meltQuote = quote;
+          if (i.type === PaymentMethod.Onchain && !i.network) {
+            i.network = onchainNetwork(i.request || quote.request);
           }
         });
+      try {
+        const updates: any = {
+          meltQuote: quote,
+        };
+        if (options?.status) {
+          updates.status = options.status;
+          if (options.status === "paid") {
+            updates.paidDate = currentDateStr();
+          }
+        }
+        if (options?.amount !== undefined) {
+          updates.amount = options.amount;
+        }
+        const updated = await usePaymentHistoryStore().updatePayment(
+          quote.quote,
+          updates
+        );
+        if (updated) {
+          this.syncPaymentHistoryCache();
+        }
+      } catch (error) {
+        console.error("Could not update payment history", error);
+      }
     },
+    setMeltChangeOutputData: setMeltChangeOutputData,
+    clearMeltChangeOutputData: clearMeltChangeOutputData,
     checkPendingTokens: async function (verbose: boolean = true) {
       const tokenStore = useTokensStore();
       const last_n = 5;
@@ -1429,60 +1423,8 @@ export const useWalletStore = defineStore("wallet", {
         }
       }
     },
-    handleBolt11Invoice: async function () {
-      this.payInvoiceData.show = true;
-      let invoice;
-      try {
-        invoice = bolt11Decoder.decode(this.payInvoiceData.input.request);
-      } catch (error) {
-        notifyWarning(
-          this.t("wallet.notifications.failed_to_decode_invoice"),
-          undefined,
-          3000
-        );
-        this.payInvoiceData.show = false;
-        throw error;
-      }
-      let cleanInvoice = {
-        bolt11: invoice.paymentRequest,
-        memo: "",
-        msat: 0,
-        sat: 0,
-        fsat: 0,
-        hash: "",
-        description: "",
-        timestamp: 0,
-        expireDate: "",
-        expired: false,
-      };
-      _.each(invoice.sections, (tag) => {
-        if (_.isObject(tag) && _.has(tag, "name")) {
-          if (tag.name === "amount") {
-            cleanInvoice.msat = parseInt(tag.value, 10);
-            cleanInvoice.sat = parseInt(tag.value, 10) / 1000;
-            cleanInvoice.fsat = cleanInvoice.sat;
-          } else if (tag.name === "payment_hash") {
-            cleanInvoice.hash = tag.value;
-          } else if (tag.name === "description") {
-            cleanInvoice.description = tag.value;
-          } else if (tag.name === "timestamp") {
-            cleanInvoice.timestamp = tag.value;
-          } else if (tag.name === "expiry") {
-            var expireDate = new Date(
-              (cleanInvoice.timestamp + tag.value) * 1000
-            );
-            cleanInvoice.expireDate = date.formatDate(
-              expireDate,
-              "YYYY-MM-DDTHH:mm:ss.SSSZ"
-            );
-            cleanInvoice.expired = false; // TODO
-          }
-        }
-      });
-
-      this.payInvoiceData.invoice = Object.freeze(cleanInvoice);
-      // get quote for this request
-      await this.meltQuoteInvoiceData();
+    handleBolt11InvoiceBolt11: async function () {
+      return await handleBolt11InvoiceBolt11.call(this);
     },
     handleCashuToken: function () {
       this.payInvoiceData.show = false;
@@ -1495,24 +1437,196 @@ export const useWalletStore = defineStore("wallet", {
     },
     handlePaymentRequest: async function (req: string) {
       const prStore = usePRStore();
-      await prStore.decodePaymentRequest(req);
+      try {
+        await prStore.decodePaymentRequest(req);
+        this.payInvoiceData.show = false;
+      } catch (error: any) {
+        notifyError(`${error?.message ?? error}`, "Could not pay request");
+      }
+    },
+    handleBolt12Offer: async function (offer: string) {
+      const mintStore = useMintsStore();
+      this.payInvoiceData.show = true;
+      this.payInvoiceData.input.amount = undefined;
+      this.payInvoiceData.input.quote = "";
+      this.payInvoiceData.meltQuote.error = "";
+      this.payInvoiceData.meltQuote.response = {
+        quote: "",
+        amount: 0,
+        fee_reserve: 0,
+      };
+      let decoded;
+      try {
+        decoded = decodeBolt12Offer(offer);
+      } catch (e) {
+        console.error("Failed to decode BOLT12 offer", e);
+        notifyWarning(
+          this.t("wallet.notifications.failed_to_decode_invoice"),
+          undefined,
+          3000
+        );
+        this.payInvoiceData.show = false;
+        throw e;
+      }
+
+      const amountMsat = decoded.amount ? parseInt(decoded.amount) : 0;
+
+      const cleanOffer = {
+        request: offer,
+        bolt12: offer,
+        memo: decoded.description || "",
+        msat: amountMsat,
+        sat: Math.floor(amountMsat / 1000),
+        fsat: amountMsat / 1000,
+        description: decoded.description || "",
+      } as any;
+
+      const mintResult = await ensurePaymentMethodMintActive(
+        mintStore.mints,
+        mintStore.activeMintUrl,
+        mintStore.selectMintUrl.bind(mintStore),
+        PaymentMethod.Bolt12,
+        "melt",
+        mintStore.activeUnit
+      );
+      if (!mintResult.ok) {
+        this.payInvoiceData.meltQuote.error = this.t(mintResult.errorKey);
+        this.payInvoiceData.invoice = Object.freeze(cleanOffer);
+        return;
+      }
+
+      this.payInvoiceData.invoice = Object.freeze(cleanOffer);
+      if (cleanOffer.sat > 0) {
+        // If offer has fixed amount, force it
+        this.payInvoiceData.input.amount = cleanOffer.sat;
+        await this.meltQuoteInvoiceData();
+      }
+    },
+    isBitcoinAddress: function (value: string): boolean {
+      const v = value.trim();
+      return (
+        /^(bc1|tb1|bcrt1)[a-z0-9]{20,90}$/i.test(v) ||
+        /^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(v) ||
+        /^[mn2][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(v)
+      );
+    },
+    handleOnchainAddress: async function (address: string) {
+      const mintStore = useMintsStore();
+      this.payInvoiceData.show = true;
+      this.payInvoiceData.input.amount = undefined;
+      this.payInvoiceData.input.quote = "";
+      this.payInvoiceData.meltQuote.error = "";
+      this.payInvoiceData.meltQuote.response = {
+        quote: "",
+        amount: 0,
+        fee_reserve: 0,
+      };
+
+      const cleanAddress = {
+        request: address,
+        onchain: address,
+        network: onchainNetwork(address),
+        memo: "",
+        msat: 0,
+        sat: 0,
+        fsat: 0,
+        description: "",
+      } as any;
+
+      const mintResult = await ensurePaymentMethodMintActive(
+        mintStore.mints,
+        mintStore.activeMintUrl,
+        mintStore.selectMintUrl.bind(mintStore),
+        PaymentMethod.Onchain,
+        "melt",
+        mintStore.activeUnit
+      );
+      if (!mintResult.ok) {
+        this.payInvoiceData.meltQuote.error =
+          "None of your mints support on-chain payments";
+        this.payInvoiceData.invoice = Object.freeze(cleanAddress);
+        return;
+      }
+
+      this.payInvoiceData.invoice = Object.freeze(cleanAddress);
     },
     decodeRequest: async function (req: string) {
       const p2pkStore = useP2PKStore();
       req = req.trim();
       this.payInvoiceData.input.request = req;
-      if (req.toLowerCase().startsWith("lnbc")) {
+      if (
+        req.toLowerCase().startsWith("lnbc") ||
+        req.toLowerCase().startsWith("lntb") ||
+        req.toLowerCase().startsWith("lntbs") ||
+        req.toLowerCase().startsWith("lnbcrt")
+      ) {
         this.payInvoiceData.input.request = req;
-        await this.handleBolt11Invoice();
+        await this.handleBolt11InvoiceBolt11();
       } else if (req.toLowerCase().startsWith("lightning:")) {
-        this.payInvoiceData.input.request = req.slice(10);
-        await this.handleBolt11Invoice();
-      } else if (req.startsWith("bitcoin:")) {
-        const lightningInvoice = req.match(/lightning=([^&]+)/);
-        if (lightningInvoice) {
-          this.payInvoiceData.input.request = lightningInvoice[1];
-          await this.handleBolt11Invoice();
+        const ln = req.slice(10);
+        if (ln.toLowerCase().startsWith("lno1")) {
+          await this.handleBolt12Offer(ln);
+        } else {
+          this.payInvoiceData.input.request = ln;
+          await this.handleBolt11InvoiceBolt11();
         }
+      } else if (req.toLowerCase().startsWith("bitcoin:")) {
+        try {
+          const url = new URL(
+            req.replace(/^bitcoin:/i, "bitcoin://placeholder/")
+          );
+          const address = url.pathname.replace(/^\//, "");
+          // BIP-321 query keys are case-insensitive (per RFC 3986 / BIP-21).
+          // Encoders may emit fully uppercase URIs to enable QR alphanumeric
+          // mode for denser codes (e.g. CDK, cashu-for-woocommerce).
+          const getParamCI = (name: string): string | null => {
+            for (const [k, v] of url.searchParams) {
+              if (k.toLowerCase() === name) return v;
+            }
+            return null;
+          };
+          const creq = getParamCI("creq");
+          const lightning = getParamCI("lightning");
+          if (creq) {
+            this.payInvoiceData.input.request = creq;
+            await this.handlePaymentRequest(creq);
+          } else if (lightning) {
+            this.payInvoiceData.input.request = lightning;
+            if (lightning.toLowerCase().startsWith("lno1")) {
+              await this.handleBolt12Offer(lightning);
+            } else if (lightning.toLowerCase().startsWith("lnurl1")) {
+              await this.lnurlPayFirst(lightning);
+            } else {
+              await this.handleBolt11InvoiceBolt11();
+            }
+          } else if (address && this.isBitcoinAddress(address)) {
+            this.payInvoiceData.input.request = address;
+            await this.handleOnchainAddress(address);
+          }
+        } catch {
+          const addressMatch = req.match(/^bitcoin:([^?]+)/i);
+          const creqMatch = req.match(/[?&]creq=([^&]+)/i);
+          const lightningMatch = req.match(/[?&]lightning=([^&]+)/i);
+          if (creqMatch) {
+            this.payInvoiceData.input.request = creqMatch[1];
+            await this.handlePaymentRequest(creqMatch[1]);
+          } else if (lightningMatch) {
+            this.payInvoiceData.input.request = lightningMatch[1];
+            const lm = lightningMatch[1];
+            if (lm.toLowerCase().startsWith("lno1")) {
+              await this.handleBolt12Offer(lm);
+            } else {
+              await this.handleBolt11InvoiceBolt11();
+            }
+          } else if (addressMatch && this.isBitcoinAddress(addressMatch[1])) {
+            this.payInvoiceData.input.request = addressMatch[1];
+            await this.handleOnchainAddress(addressMatch[1]);
+          }
+        }
+      } else if (this.isBitcoinAddress(req)) {
+        await this.handleOnchainAddress(req);
+      } else if (req.toLowerCase().startsWith("lno1")) {
+        await this.handleBolt12Offer(req);
       } else if (req.toLowerCase().startsWith("lnurl:")) {
         this.payInvoiceData.input.request = req.slice(6);
         await this.lnurlPayFirst(this.payInvoiceData.input.request);
@@ -1539,24 +1653,45 @@ export const useWalletStore = defineStore("wallet", {
       } else if (p2pkStore.isValidPubkey(req)) {
         this.handleP2PK(req);
       } else if (req.startsWith("http")) {
+        // Scanned/pasted mint URL: open the add-mint confirmation sheet on
+        // the mints tab instead of only filling the input box.
         const mintStore = useMintsStore();
         mintStore.addMintData = { url: req, nickname: "" };
-      } else if (req.startsWith("creqA")) {
+        useUiStore().setTab("mints");
+        mintStore.showAddMintDialog = true;
+      } else if (
+        req.toLowerCase().startsWith("creqa") ||
+        req.toLowerCase().startsWith("creqb")
+      ) {
         await this.handlePaymentRequest(req);
+      } else if (isLegacyRetailQR(req)) {
+        // Try to convert legacy retail QR code (EMV format) to Lightning Address
+        const lightningAddress = translateLegacyQRToLightningAddress(req);
+        if (lightningAddress) {
+          // Process as Lightning Address (LNURL)
+          this.payInvoiceData.input.request = lightningAddress;
+          await this.lnurlPayFirst(lightningAddress);
+        } else {
+          // Not a supported merchant QR code
+          notifyWarning(
+            this.t("wallet.notifications.unsupported_legacy_qr"),
+            this.t("wallet.notifications.legacy_qr_not_supported")
+          );
+        }
       }
       const uiStore = useUiStore();
       uiStore.closeDialogs();
     },
     lnurlPayFirst: async function (address: string) {
-      var host;
-      var data;
+      let host;
+      let data;
       if (address.split("@").length == 2) {
-        let [user, lnaddresshost] = address.split("@");
+        const [user, lnaddresshost] = address.split("@");
         host = `https://${lnaddresshost}/.well-known/lnurlp/${user}`;
         const resp = await axios.get(host); // Moved it here: we don't want 2 potential calls
         data = resp.data;
       } else if (address.toLowerCase().slice(0, 6) === "lnurl1") {
-        let decoded = bech32.decode(address, 20000);
+        const decoded = bech32.decode(address, 20000);
         const words = bech32.fromWords(decoded.words);
         const uint8Array = new Uint8Array(words);
         host = new TextDecoder().decode(uint8Array);
@@ -1634,8 +1769,10 @@ export const useWalletStore = defineStore("wallet", {
           const usdAmount = amount;
           amount = Math.floor(usdAmount * satPrice);
         }
-        var { data } = await axios.get(
-          `${this.payInvoiceData.lnurlpay.callback}?amount=${amount * 1000}`
+        const callback = this.payInvoiceData.lnurlpay.callback;
+        const separator = callback.includes("?") ? "&" : "?";
+        const { data } = await axios.get(
+          `${callback}${separator}amount=${amount * 1000}`
         );
         // check http error
         if (data.status == "ERROR") {
@@ -1651,13 +1788,23 @@ export const useWalletStore = defineStore("wallet", {
       }
       return this.mnemonic;
     },
-    handleOutputsHaveAlreadyBeenSignedError: function (
+    async handleOutputsHaveAlreadyBeenSignedError(
       keysetId: string,
-      error: any
+      error: any,
+      notifyUser = true
     ) {
-      if (error.message.includes("outputs have already been signed")) {
-        this.increaseKeysetCounter(keysetId, 10);
-        notify(this.t("wallet.notifications.please_try_again"));
+      if (error?.message?.includes("outputs have already been signed")) {
+        if (notifyUser) {
+          console.warn(
+            `[wallet] outputs already signed for keyset ${keysetId}, advancing counter and trying again`
+          );
+        }
+        const next = this.keysetCounter(keysetId) + 10;
+        await this.getOrCreateCounterSource().advanceToAtLeast(keysetId, next);
+        this.syncCounterToStorage(keysetId, next);
+        if (notifyUser) {
+          notify(this.t("wallet.notifications.trying_again"));
+        }
         return true;
       }
       return false;

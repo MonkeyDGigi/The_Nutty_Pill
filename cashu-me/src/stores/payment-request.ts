@@ -1,7 +1,10 @@
 import { defineStore } from "pinia";
-import { useWalletStore } from "./wallet";
 import {
+  Amount,
+  type AmountLike,
   decodePaymentRequest,
+  JSONInt,
+  normalizeProofAmounts,
   PaymentRequest,
   PaymentRequestPayload,
   PaymentRequestTransport,
@@ -13,14 +16,15 @@ import { useNostrStore } from "./nostr";
 import { useTokensStore } from "./tokens";
 import type { HistoryToken } from "./tokens";
 import token from "src/js/token";
-import {
-  notify,
-  notifyError,
-  notifySuccess,
-  notifyWarning,
-} from "src/js/notify";
+import { notifySuccess, notifyWarning } from "src/js/notify";
 import { useLocalStorage } from "@vueuse/core";
 import { v4 as uuidv4 } from "uuid";
+
+// Request fields used by the UI and delivery; history stores these as plain data.
+export type PaymentRequestData = Pick<
+  PaymentRequest,
+  "transport" | "id" | "unit" | "mints" | "description" | "singleUse" | "nut10"
+> & { amount?: AmountLike };
 
 export type OurPaymentRequest = {
   id: string; // UUID from PaymentRequest
@@ -64,7 +68,6 @@ export const usePRStore = defineStore("payment-request", {
       mintUrl?: string,
       forceNew: boolean = false
     ) {
-      const walletStore = useWalletStore();
       // If not forcing a new request and we already have at least one,
       // do not auto-create a new one; just show the currently selected.
       if (!forceNew && this.ourPaymentRequests.length > 0) {
@@ -113,6 +116,9 @@ export const usePRStore = defineStore("payment-request", {
       encoded: string,
       memo?: string
     ) {
+      // PaymentRequest.id is optional in v4; we key OurPaymentRequest by id,
+      // so a request without one can't be tracked.
+      if (!request.id) return;
       const existIdx = this.ourPaymentRequests.findIndex(
         (r) => r.id === request.id
       );
@@ -180,8 +186,9 @@ export const usePRStore = defineStore("payment-request", {
     async decodePaymentRequest(pr: string) {
       console.log("decodePaymentRequest", pr);
       const request: PaymentRequest = decodePaymentRequest(pr);
+      this.getPaymentRequestTransport(request);
       console.log("decodePaymentRequest", request);
-      const mintsStore = useMintsStore() as any;
+      const mintsStore = useMintsStore();
       // activate the mint in the payment request
       if (request.mints && request.mints.length > 0) {
         let foundMint = false;
@@ -194,7 +201,6 @@ export const usePRStore = defineStore("payment-request", {
           }
         }
         if (!foundMint) {
-          notifyError(`This payment requires using the mint: ${request.mints}`);
           throw new Error(
             `This payment requires using the mint: ${request.mints}`
           );
@@ -214,14 +220,13 @@ export const usePRStore = defineStore("payment-request", {
       }
 
       const sendTokenStore = useSendTokensStore();
-      if (!sendTokenStore.showSendTokens) {
-        // if the sendtokendialog is not currently open, clear all data and then show the send dialog
-        sendTokenStore.clearSendData();
-      }
+      // Always clear any existing send data so a new payment request starts fresh
+      sendTokenStore.clearSendData();
       // if the payment request has an amount, set it
       if (request.amount) {
         sendTokenStore.sendData.amount =
-          request.amount / mintsStore.activeUnitCurrencyMultiplyer;
+          Amount.from(request.amount).toNumber() /
+          mintsStore.activeUnitCurrencyMultiplyer;
       }
       // Also make sure this decoded request gets stored (e.g., if user pasted an older one)
       try {
@@ -237,34 +242,41 @@ export const usePRStore = defineStore("payment-request", {
         sendTokenStore.showSendTokens = true;
       }
     },
+    getPaymentRequestTransport(
+      request: PaymentRequestData
+    ): PaymentRequestTransport {
+      const transport = request.transport?.find(
+        (transport) =>
+          transport.type === PaymentRequestTransportType.NOSTR ||
+          transport.type === PaymentRequestTransportType.POST
+      );
+      if (!transport) {
+        throw new Error("Unsupported payment request transport.");
+      }
+      return transport;
+    },
     async parseAndPayPaymentRequest(
-      request: PaymentRequest,
+      request: PaymentRequestData,
       tokenStr: string
     ): Promise<boolean> {
-      const transports: PaymentRequestTransport[] = request.transport ?? [];
-      for (const transport of transports) {
-        if (transport.type == PaymentRequestTransportType.NOSTR) {
-          return await this.payNostrPaymentRequest(
-            request,
-            transport,
-            tokenStr
-          );
-        }
-        if (transport.type == PaymentRequestTransportType.POST) {
-          return await this.payPostPaymentRequest(request, transport, tokenStr);
-        }
+      const transport = this.getPaymentRequestTransport(request);
+      if (transport.type == PaymentRequestTransportType.NOSTR) {
+        return await this.payNostrPaymentRequest(request, transport, tokenStr);
+      }
+      if (transport.type == PaymentRequestTransportType.POST) {
+        return await this.payPostPaymentRequest(request, transport, tokenStr);
       }
       throw new Error("Unsupported payment request transport.");
     },
     async payNostrPaymentRequest(
-      request: PaymentRequest,
+      request: PaymentRequestData,
       transport: PaymentRequestTransport,
       tokenStr: string
     ): Promise<boolean> {
       console.log("payNostrPaymentRequest", request, tokenStr);
       console.log("transport", transport);
       const nostrStore = useNostrStore();
-      const decodedToken = token.decode(tokenStr);
+      const decodedToken = await token.decodeFull(tokenStr);
       if (!decodedToken) {
         console.error("could not decode token");
         throw new Error("Could not decode ecash token.");
@@ -275,9 +287,9 @@ export const usePRStore = defineStore("payment-request", {
         id: request.id,
         mint: mint,
         unit: request.unit || "",
-        proofs: proofs,
+        proofs: normalizeProofAmounts(proofs),
       };
-      const paymentPayloadString = JSON.stringify(paymentPayload);
+      const paymentPayloadString = JSONInt.stringify(paymentPayload)!;
       try {
         await nostrStore.sendNip17DirectMessageToNprofile(
           transport.target,
@@ -291,13 +303,13 @@ export const usePRStore = defineStore("payment-request", {
       return true;
     },
     async payPostPaymentRequest(
-      request: PaymentRequest,
+      request: PaymentRequestData,
       transport: PaymentRequestTransport,
       tokenStr: string
     ): Promise<boolean> {
       console.log("payPostPaymentRequest", request, tokenStr);
       // get the endpoint from the transport target and make an HTTP POST request with the paymentPayload as the body
-      const decodedToken = token.decode(tokenStr);
+      const decodedToken = await token.decodeFull(tokenStr);
       if (!decodedToken) {
         console.error("could not decode token");
         throw new Error("Could not decode ecash token.");
@@ -309,9 +321,9 @@ export const usePRStore = defineStore("payment-request", {
         id: request.id,
         mint: mint,
         unit: unit,
-        proofs: proofs,
+        proofs: normalizeProofAmounts(proofs),
       };
-      const paymentPayloadString = JSON.stringify(paymentPayload);
+      const paymentPayloadString = JSONInt.stringify(paymentPayload)!;
       try {
         const response = await fetch(transport.target, {
           headers: {

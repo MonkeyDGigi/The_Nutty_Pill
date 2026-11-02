@@ -1,7 +1,6 @@
 <template>
   <div class="row q-col-gutter-y-md justify-center q-pt-sm q-pb-md">
     <div class="col-12 col-sm-11 col-md-8 text-center q-gutter-y-md">
-      <ActivityOrb />
       <NoMintWarnBanner v-if="mints.length == 0" />
       <BalanceView v-else :set-tab="setTab" />
       <div
@@ -11,6 +10,7 @@
           <q-btn
             rounded
             dense
+            data-testid="wallet-receive"
             class="q-px-md q-mr-md wallet-action-btn"
             color="primary"
             @click="showReceiveDialog = true"
@@ -34,6 +34,7 @@
           <q-btn
             rounded
             dense
+            data-testid="wallet-send"
             class="q-px-md q-ml-md wallet-action-btn"
             color="primary"
             @click="showSendDialog = true"
@@ -185,6 +186,7 @@
 import { date } from "quasar";
 import * as _ from "underscore";
 import { shortenString } from "src/js/string-utils";
+import { sumProofAmounts } from "src/js/proofs";
 import token from "src/js/token";
 
 // Vue components
@@ -200,14 +202,12 @@ import ReceiveDialog from "components/ReceiveDialog.vue";
 import QrcodeReader from "components/QrcodeReader.vue";
 import iOSPWAPrompt from "components/iOSPWAPrompt.vue";
 import AndroidPWAPrompt from "components/AndroidPWAPrompt.vue";
-import ActivityOrb from "components/ActivityOrb.vue";
 
 // pinia stores
 import { mapActions, mapState, mapWritableState } from "pinia";
 import { useMintsStore } from "src/stores/mints";
 import { useSendTokensStore } from "src/stores/sendTokensStore";
 import { useReceiveTokensStore } from "src/stores/receiveTokensStore";
-import { useWorkersStore } from "src/stores/workers";
 import { useTokensStore } from "src/stores/tokens";
 import { useWalletStore } from "src/stores/wallet";
 import { useUiStore } from "src/stores/ui";
@@ -215,8 +215,8 @@ import { useProofsStore } from "src/stores/proofs";
 import { useCameraStore } from "src/stores/camera";
 import { useP2PKStore } from "src/stores/p2pk";
 import { useNWCStore } from "src/stores/nwc";
-import { useNPCStore } from "src/stores/npubcash";
-import { useNPCV2Store } from "src/stores/npcv2";
+// @ts-ignore
+import { useNpubCashStore } from "src/stores/npubcash";
 import { useNostrStore } from "src/stores/nostr";
 import { usePRStore } from "src/stores/payment-request";
 import { useDexieStore } from "src/stores/dexie";
@@ -224,7 +224,7 @@ import { useDexieStore } from "src/stores/dexie";
 import { useStorageStore } from "src/stores/storage";
 import ReceiveTokenDialog from "src/components/ReceiveTokenDialog.vue";
 import { useWelcomeStore } from "../stores/welcome";
-import { useInvoicesWorkerStore } from "src/stores/invoicesWorker";
+import { useTransactionWorkerStore } from "src/stores/transactionWorker";
 import { notifyError, notify } from "../js/notify";
 
 import {
@@ -235,6 +235,9 @@ import {
 } from "lucide-vue-next";
 
 import { useMigrationsStore } from "src/stores/migrations";
+
+declare const windowMixin: any;
+declare const GIT_COMMIT: string;
 
 export default {
   mixins: [windowMixin],
@@ -253,34 +256,19 @@ export default {
     iOSPWAPrompt,
     AndroidPWAPrompt,
     ScanIcon,
-    ActivityOrb,
   },
   data: function () {
     return {
       name: "",
       mintId: "",
       mintName: "",
-      deferredPWAInstallPrompt: null,
+      deferredPWAInstallPrompt: null as any,
       action: "main",
-      parse: {
-        show: false,
-        invoice: null,
-        lnurlpay: null,
-        lnurlauth: null,
-        data: {
-          request: "",
-          amount: 0,
-          comment: "",
-        },
-        camera: {
-          show: false,
-          camera: "auto",
-        },
-      },
-      payments: [],
+      payments: [] as any[],
       paymentsChart: {
         show: false,
       },
+      historyHydrated: false,
       welcomeDialog: {
         show: false,
       },
@@ -294,6 +282,7 @@ export default {
     ...mapState(useUiStore, ["tickerShort"]),
     ...mapWritableState(useUiStore, [
       "showInvoiceDetails",
+      "showBolt12OfferDetails",
       "showCreateInvoiceDialog",
       "tab",
       "showSendDialog",
@@ -318,10 +307,6 @@ export default {
       "payInvoiceData",
     ]),
     ...mapWritableState(useMintsStore, ["addMintData", "showAddMintDialog"]),
-    ...mapWritableState(useWorkersStore, [
-      "invoiceCheckListener",
-      "tokensCheckSpendableListener",
-    ]),
     ...mapState(useTokensStore, ["historyTokens"]),
     ...mapState(usePRStore, ["enablePaymentRequest"]),
     ...mapWritableState(useCameraStore, ["camera", "hasCamera"]),
@@ -332,13 +317,9 @@ export default {
     },
 
     balance: function () {
-      return this.activeProofs
-        .map((t) => t)
-        .flat()
-        .reduce((sum, el) => (sum += el.amount), 0);
+      return sumProofAmounts(this.activeProofs.flat());
     },
   },
-  filters: {},
   methods: {
     ...mapActions(useProofsStore, [
       "serializeProofs",
@@ -356,22 +337,18 @@ export default {
       "setProofs",
       "getKeysForKeyset",
     ]),
-    ...mapActions(useWorkersStore, ["clearAllWorkers", "invoiceCheckWorker"]),
-    ...mapActions(useTokensStore, ["setTokenPaid"]),
+    ...mapActions(useTokensStore, ["setTokenPaid", "initEcashHistory"]),
     ...mapActions(useWalletStore, [
       "setInvoicePaid",
       "mint",
       "checkPendingTokens",
       "decodeRequest",
       "initializeMnemonic",
+      "initPaymentHistory",
     ]),
     ...mapActions(useCameraStore, ["closeCamera", "showCamera"]),
     ...mapActions(useNWCStore, ["listenToNWCCommands"]),
-    ...mapActions(useNPCStore, ["generateNPCConnection", "claimAllTokens"]),
-    ...mapActions(useNPCV2Store, [
-      "generateNPCV2Connection",
-      "getLatestQuotes",
-    ]),
+    ...mapActions(useNpubCashStore, ["initializeNpubCash"]),
     ...mapActions(useNostrStore, [
       "sendNip04DirectMessage",
       "sendNip17DirectMessage",
@@ -383,18 +360,11 @@ export default {
     ...mapActions(useDexieStore, ["migrateToDexie"]),
     ...mapActions(useStorageStore, ["checkLocalStorage"]),
     ...mapActions(usePRStore, ["createPaymentRequest"]),
-    ...mapActions(useInvoicesWorkerStore, [
-      "startInvoiceCheckerWorker",
-      "checkPendingInvoices",
+    ...mapActions(useTransactionWorkerStore, [
+      "startTransactionWorker",
+      "checkPendingTransactions",
     ]),
     // TOKEN METHODS
-    decodeToken: function (encoded_token) {
-      try {
-        return token.decode(encoded_token);
-      } catch (e) {
-        return null;
-      }
-    },
     getProofs: function (decoded_token) {
       return token.getProofs(decoded_token);
     },
@@ -407,7 +377,7 @@ export default {
     },
     getTokenList: function () {
       const amounts = this.activeProofs.map((t) => t.amount);
-      const counts = {};
+      const counts = {} as any;
 
       for (const num of amounts) {
         counts[num] = counts[num] ? counts[num] + 1 : 1;
@@ -415,7 +385,7 @@ export default {
       return Object.keys(counts).map((k) => ({
         value: parseInt(k),
         count: parseInt(counts[k]),
-        sum: k * counts[k],
+        sum: Number(k) * counts[k],
       }));
     },
 
@@ -425,7 +395,7 @@ export default {
     showChart: function () {
       this.paymentsChart.show = true;
       this.$nextTick(() => {
-        generateChart(this.$refs.canvas, this.payments);
+        // generateChart(this.$refs.canvas, this.payments);
       });
     },
     focusInput(el) {
@@ -469,7 +439,7 @@ export default {
     showInvoiceCreateDialog: async function () {
       console.log("##### showInvoiceCreateDialog");
       this.invoiceData.amount = "";
-      this.invoiceData.bolt11 = "";
+      this.invoiceData.request = "";
       this.invoiceData.hash = "";
       this.invoiceData.memo = "";
       this.showCreateInvoiceDialog = true;
@@ -514,9 +484,10 @@ export default {
       const isStandalone = window.matchMedia(
         "(display-mode: standalone)"
       ).matches;
+      // @ts-ignore
       if (document.referrer.startsWith("android-app://")) {
         return "twa";
-      } else if (navigator.standalone || isStandalone) {
+      } else if ((navigator as any).standalone || isStandalone) {
         return "standalone";
       }
       return "browser";
@@ -529,6 +500,7 @@ export default {
       this.deferredPWAInstallPrompt.userChoice.then((choiceResult) => {
         if (choiceResult.outcome === "accepted") {
           console.log("User accepted the install prompt");
+          // @ts-ignore
           this.setWelcomeDialogSeen();
         } else {
           console.log("User dismissed the install prompt");
@@ -565,59 +537,73 @@ export default {
         if (actionBtns.length >= 2) {
           // Reset widths first
           actionBtns.forEach((btn) => {
-            btn.style.width = "auto";
+            (btn as HTMLElement).style.width = "auto";
           });
 
           // Get the maximum width
           let maxWidth = 0;
           actionBtns.forEach((btn) => {
-            maxWidth = Math.max(maxWidth, btn.offsetWidth);
+            maxWidth = Math.max(maxWidth, (btn as HTMLElement).offsetWidth);
           });
 
           // Apply the maximum width to all buttons
           actionBtns.forEach((btn) => {
-            btn.style.width = `${maxWidth}px`;
+            (btn as HTMLElement).style.width = `${maxWidth}px`;
           });
         }
       });
+    },
+    handleVisibilityChange: function () {
+      if (document.visibilityState === "visible") {
+        console.log("### App brought to foreground, checking NWC...");
+        if (this.nwcEnabled) {
+          this.listenToNWCCommands();
+        }
+      }
     },
   },
   watch: {},
 
   mounted: function () {
-    // generate NPC connection
-    this.generateNPCConnection();
-    this.claimAllTokens();
-    this.generateNPCV2Connection();
-    this.getLatestQuotes();
+    this.initializeNpubCash();
     // Ensure wallet action buttons have equal width
     this.$nextTick(this.equalizeButtonWidths);
     // Add window resize listener to handle responsive layouts
     window.addEventListener("resize", this.equalizeButtonWidths);
+    document.addEventListener("visibilitychange", this.handleVisibilityChange);
   },
 
   beforeUnmount: function () {
     // Remove event listener when component is destroyed
     window.removeEventListener("resize", this.equalizeButtonWidths);
+    document.removeEventListener(
+      "visibilitychange",
+      this.handleVisibilityChange
+    );
   },
 
   created: async function () {
-    console.log(`Git commit: ${GIT_COMMIT}`);
+    // @ts-ignore
+    if (typeof GIT_COMMIT !== "undefined") {
+      console.log(`Git commit: ${GIT_COMMIT}`);
+    }
 
     // Initialize and run migrations
     const migrationsStore = useMigrationsStore();
     migrationsStore.initMigrations();
     await migrationsStore.runMigrations();
+    await Promise.all([this.initPaymentHistory(), this.initEcashHistory()]);
+    this.historyHydrated = true;
 
     // check if another tab is open
     this.registerBroadcastChannel();
 
-    let params = new URL(document.location).searchParams;
-    let hash = new URL(document.location).hash;
+    const params = new URL(document.location as any).searchParams;
+    const hash = new URL(document.location as any).hash;
 
     // mint url
     if (params.get("mint")) {
-      let addMintUrl = params.get("mint");
+      const addMintUrl = params.get("mint") as string;
       this.$router.push("/mints");
       this.showAddMintDialog = true;
       this.addMintData = { url: addMintUrl };
@@ -631,11 +617,12 @@ export default {
 
     // get token to receive tokens from a link
     if (params.get("token") || hash.includes("token")) {
-      let tokenBase64 = params.get("token") || hash.split("token=")[1];
+      const tokenBase64 = (params.get("token") ||
+        hash.split("token=")[1]) as string;
       // make sure to react only to tokens not in the users history
       let seen = false;
-      for (var i = 0; i < this.historyTokens.length; i++) {
-        var thisToken = this.historyTokens[i].token;
+      for (let i = 0; i < this.historyTokens.length; i++) {
+        const thisToken = this.historyTokens[i].token;
         if (thisToken == tokenBase64 && this.historyTokens[i].amount > 0) {
           seen = true;
         }
@@ -650,7 +637,7 @@ export default {
     // get lightning invoice from a link
     if (params.get("lightning")) {
       this.showParseDialog();
-      this.payInvoiceData.input.request = params.get("lightning");
+      this.payInvoiceData.input.request = params.get("lightning") as string;
     }
 
     // Clear all parameters from URL without refreshing the page
@@ -702,11 +689,11 @@ export default {
       this.subscribeToNip17DirectMessages();
     }
 
-    // start invoice checker worker
-    this.startInvoiceCheckerWorker();
+    // Start background transaction reconciliation.
+    this.startTransactionWorker();
 
     // reconnect all websockets
-    this.checkPendingInvoices();
+    this.checkPendingTransactions();
   },
 };
 </script>

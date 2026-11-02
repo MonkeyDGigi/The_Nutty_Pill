@@ -20,6 +20,7 @@
       <q-btn
         color="primary"
         rounded
+        data-testid="onboarding-start"
         :label="$t('WelcomePage.actions.next.label')"
         @click="goToNext"
         class="welcome-next-btn"
@@ -427,6 +428,8 @@ export default {
         { label: "Italiano", value: "it-IT" },
         { label: "Deutsch", value: "de-DE" },
         { label: "Français", value: "fr-FR" },
+        { label: "Čeština", value: "cs-CZ" },
+        { label: "Português (Brasil)", value: "pt-BR" },
         { label: "Svenska", value: "sv-SE" },
         { label: "Ελληνικά", value: "el-GR" },
         { label: "Türkçe", value: "tr-TR" },

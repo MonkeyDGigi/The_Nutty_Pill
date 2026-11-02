@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { decodePaymentRequest, PaymentRequest } from "@cashu/cashu-ts";
+import type { PaymentRequestData } from "src/stores/payment-request";
 import { HistoryToken } from "./tokens";
 
 export const useSendTokensStore = defineStore("sendTokensStore", {
@@ -22,7 +22,7 @@ export const useSendTokensStore = defineStore("sendTokensStore", {
       tokens: string;
       tokensBase64: string;
       p2pkPubkey: string;
-      paymentRequest?: PaymentRequest;
+      paymentRequest?: PaymentRequestData;
       historyToken: HistoryToken | undefined;
     },
   }),
@@ -36,6 +36,20 @@ export const useSendTokensStore = defineStore("sendTokensStore", {
       this.sendData.p2pkPubkey = "";
       this.sendData.paymentRequest = undefined;
       this.sendData.historyToken = undefined;
+    },
+    // Drops any token/proofs that were prepared for the current PaymentRequest
+    // so the next pay attempt rebuilds them from the currently-active mint.
+    // No-op when no PR is active (regular send flows keep their tokensBase64
+    // until the dialog closes).
+    invalidatePreparedPaymentRequestToken(): boolean {
+      if (!this.sendData.paymentRequest) return false;
+      if (!this.sendData.tokensBase64 && !this.sendData.historyToken)
+        return false;
+      this.sendData.tokens = "";
+      this.sendData.tokensBase64 = "";
+      this.sendData.historyToken = undefined;
+      this.sendData.historyAmount = null;
+      return true;
     },
   },
 });

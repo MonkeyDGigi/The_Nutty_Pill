@@ -1,13 +1,6 @@
 import { defineStore } from "pinia";
 import { useSettingsStore } from "./settings";
 import { useLocalStorage } from "@vueuse/core";
-import {
-  notifyApiError,
-  notifyError,
-  notifySuccess,
-  notifyWarning,
-  notify,
-} from "../js/notify";
 import axios from "axios";
 
 export const usePriceStore = defineStore("price", {
@@ -45,7 +38,7 @@ export const usePriceStore = defineStore("price", {
         return;
       }
       try {
-        var { data } = await axios.get(
+        const { data } = await axios.get(
           "https://api.coinbase.com/v2/exchange-rates?currency=BTC"
         );
         this.bitcoinPrices = data.data.rates;
@@ -56,7 +49,6 @@ export const usePriceStore = defineStore("price", {
         this.bitcoinPriceLastUpdated = Date.now();
       } catch (error) {
         console.error("Failed to fetch bitcoin price:", error);
-        notifyError("Failed to fetch bitcoin price");
       }
     },
     updateBitcoinPriceForCurrentCurrency: function () {

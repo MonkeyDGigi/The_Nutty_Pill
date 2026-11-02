@@ -6,6 +6,7 @@ import {
   createWebHashHistory,
 } from "vue-router";
 import routes from "./routes";
+import { adminUnlocked } from "src/js/adminSession";
 
 /*
  * If not building with SSR mode, you can
@@ -57,6 +58,12 @@ export default route(function (/* { store, ssrContext } */) {
       // No wallet found, redirect to welcome page
       console.log("[Router] No wallet found, redirecting to welcome page");
       next("/welcome");
+      return;
+    }
+
+    // Wallet settings (seed phrase included) sit behind the parent password
+    if (to.path.startsWith("/settings") && !adminUnlocked.value) {
+      next({ path: "/parent", query: { redirect: to.fullPath } });
       return;
     }
 

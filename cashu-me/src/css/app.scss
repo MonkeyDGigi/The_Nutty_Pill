@@ -24,6 +24,15 @@ body:not([data-theme]) {
   color: #9D4EDD !important; /* Light Purple */
 }
 
+// Native-app feel: disable text selection across the UI
+body {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
 // prevent pull to refresh
 html,
 body {

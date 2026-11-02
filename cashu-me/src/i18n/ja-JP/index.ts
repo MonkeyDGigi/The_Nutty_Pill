@@ -77,6 +77,7 @@ export default {
       no_lnurl_data: "LNURLデータがありません",
       no_price_data: "価格データがありません。",
       please_try_again: "もう一度お試しください。",
+      trying_again: "再試行中...",
     },
     mint: {
       notifications: {
@@ -162,6 +163,61 @@ export default {
     },
   },
   Settings: {
+    menu: {
+      title: "設定",
+      backup: {
+        title: "バックアップと復元",
+        caption: "シードフレーズとecashの復元",
+      },
+      lightning_address: {
+        title: "ライトニングアドレス",
+        caption: "ライトニングアドレスで支払いを受け取る",
+      },
+      nostr: {
+        title: "Nostr",
+        caption: "鍵、リレー、Web of Trust",
+      },
+      payment_requests: {
+        title: "支払いリクエスト",
+        caption: "nostr経由でecashの支払いを受け取る",
+      },
+      nwc: {
+        title: "Nostrウォレットコネクト",
+        caption: "他のアプリからウォレットを使用する",
+      },
+      hardware: {
+        title: "ハードウェア",
+        caption: "NFC設定",
+      },
+      p2pk: {
+        title: "P2PK",
+        caption: "自分の鍵にロックされたecashを受け取る",
+      },
+      privacy: {
+        title: "プライバシー",
+        caption: "ネットワークチェックとビットコイン価格",
+      },
+      experimental: {
+        title: "実験的機能",
+        caption: "新機能をいち早く試す",
+      },
+      appearance: {
+        title: "外観",
+        caption: "テーマ、キーボード、ビットコイン記号",
+      },
+      language: {
+        title: "言語",
+        caption: "言語を選択",
+      },
+      advanced: {
+        title: "詳細設定",
+        caption: "開発者ツールとウォレットのリセット",
+      },
+      about: {
+        title: "アプリについて",
+        caption: "利用規約とリンク",
+      },
+    },
     language: {
       title: "言語",
       description: "以下のリストから希望の言語を選択してください。",
@@ -219,13 +275,18 @@ export default {
       address: {
         copy_tooltip: "Lightningアドレスをコピー",
       },
+      show_on_receive: {
+        toggle: "受け取り時に表示",
+        description: "アドレスとQRコードを表示",
+      },
       automatic_claim: {
         toggle: "自動的に請求",
         description: "着信支払いを自動的に受け取ります。",
       },
-      npc_v2: {
-        choose_mint_title: "npub.cash v2のミントを選択",
-        choose_mint_placeholder: "ミントを選択...",
+      mint: {
+        label: "npub.cashミント",
+        choose_title: "npub.cashのミントを選択",
+        choose_placeholder: "ミントを選択...",
       },
     },
     nostr_keys: {
@@ -325,7 +386,7 @@ export default {
       check_startup: {
         toggle: "起動時に保留中の請求書をチェック",
         description:
-          "有効にすると、ウォレットは起動時に過去24時間の保留中の請求書をチェックします。",
+          "有効にすると、ウォレットは起動時に保留中の請求書をチェックします。",
       },
       check_all: {
         toggle: "すべての請求書をチェック",
@@ -430,9 +491,7 @@ export default {
       progress: "{crawlProcessed} / {crawlTotal}",
     },
     npub_cash: {
-      use_npubx: "npubx.cashを使用",
       copy_lightning_address: "Lightningアドレスをコピー",
-      v2_mint: "npub.cash v2ミント",
     },
     multinut: {
       use_multinut: "マルチナットを使用",
@@ -987,6 +1046,7 @@ export default {
       },
       send: {
         label: "@:global.actions.send.label",
+        in_progress: "送信中…",
       },
       delete: {
         tooltip_text: "履歴から削除",
@@ -1364,6 +1424,7 @@ export default {
         pay: {
           label: "支払う",
           in_progress: "@:PayInvoiceDialog.invoice.processing_info_text",
+          waiting_for_wallet: "ウォレットを待機中…",
           error: "エラー",
         },
       },
@@ -1391,7 +1452,7 @@ export default {
   AddMintDialog: {
     title: "このミントを信頼しますか？",
     description:
-      "このミントを使用する前に、信頼できることを確認してください。ミントはいつでも悪意のあるものになるか、運営を停止する可能性があります。",
+      "信頼できる場合のみ、このミントに参加してください。ミントはいつでも運営を停止する可能性があります。",
     inputs: {
       mint_url: {
         label: "@:global.inputs.mint_url.label",
@@ -1404,6 +1465,17 @@ export default {
       add_mint: {
         label: "@:global.actions.add_mint.label",
         in_progress: "ミントを追加中",
+      },
+    },
+    audit_info: {
+      label: "監査情報",
+      actions: {
+        show: {
+          label: "表示",
+        },
+        hide: {
+          label: "隠す",
+        },
       },
     },
   },

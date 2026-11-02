@@ -1,13 +1,15 @@
-import { useLocalStorage } from "@vueuse/core";
 import { date } from "quasar";
 import { defineStore } from "pinia";
+import { liveQuery } from "dexie";
+import { cashuDb } from "./dexie";
 import {
-  PaymentRequest,
+  JSONInt,
   Proof,
   Token,
-  MeltQuoteResponse,
+  MeltQuoteBolt11Response,
 } from "@cashu/cashu-ts";
 import token from "src/js/token";
+import type { PaymentRequestData } from "src/stores/payment-request";
 import { v4 as uuidv4 } from "uuid";
 
 /**
@@ -19,22 +21,76 @@ export type HistoryToken = {
   status: "paid" | "pending";
   amount: number;
   date: string;
-  token: string;
+  token?: string;
   mint: string;
   unit: string;
-  paymentRequest?: PaymentRequest;
+  paymentRequest?: PaymentRequestData;
   fee?: number;
   label?: string; // Add label field for custom naming
-  meltQuote?: MeltQuoteResponse;
+  meltQuote?: MeltQuoteBolt11Response;
   paidDate?: string;
   paymentRequestId?: string; // If created in response to a payment request
 };
 
+function sortHistoryTokens(tokens: HistoryToken[]) {
+  return tokens.slice().sort((a, b) => {
+    const aTime = new Date(a.date).getTime();
+    const bTime = new Date(b.date).getTime();
+    if (aTime !== bTime) return aTime - bTime;
+    return a.id.localeCompare(b.id);
+  });
+}
+
 export const useTokensStore = defineStore("tokens", {
   state: () => ({
-    historyTokens: useLocalStorage("cashu.historyTokens", [] as HistoryToken[]),
+    historyTokens: [] as HistoryToken[],
+    ecashHistorySubscription: null as any,
   }),
   actions: {
+    async initEcashHistory() {
+      if (!this.ecashHistorySubscription) {
+        this.ecashHistorySubscription = liveQuery(() =>
+          cashuDb.ecashHistory.toArray()
+        ).subscribe({
+          next: (historyTokens) => {
+            this.historyTokens = sortHistoryTokens(
+              historyTokens as HistoryToken[]
+            );
+          },
+          error: (error) => console.error(error),
+        });
+      }
+      await this.refreshEcashHistory();
+    },
+    async refreshEcashHistory() {
+      this.historyTokens = sortHistoryTokens(
+        (await cashuDb.ecashHistory.toArray()) as HistoryToken[]
+      );
+    },
+    persistHistoryToken(historyToken: HistoryToken) {
+      // Strip nested Vue proxies and normalize SDK Amount values before IndexedDB.
+      cashuDb.ecashHistory
+        .put(JSONInt.parse(JSONInt.stringify(historyToken)!))
+        .catch((error) => {
+          console.error("Could not persist ecash history token", error);
+        });
+    },
+    async migrateHistoryTokensFromLocalStorage() {
+      const raw = localStorage.getItem("cashu.historyTokens");
+      if (!raw) {
+        await this.refreshEcashHistory();
+        return;
+      }
+      const historyTokens = (JSON.parse(raw) as HistoryToken[]).map(
+        (historyToken) => ({
+          ...historyToken,
+          id: historyToken.id || uuidv4(),
+        })
+      );
+      await cashuDb.ecashHistory.bulkPut(historyTokens);
+      localStorage.removeItem("cashu.historyTokens");
+      await this.refreshEcashHistory();
+    },
     /**
      * @param {{amount: number, token: string, mint: string, unit: string}} param0
      */
@@ -53,12 +109,12 @@ export const useTokensStore = defineStore("tokens", {
       mint: string;
       unit: string;
       fee?: number;
-      paymentRequest?: PaymentRequest;
+      paymentRequest?: PaymentRequestData;
       label?: string;
       paymentRequestId?: string;
     }): string {
       const id = uuidv4();
-      this.historyTokens.push({
+      const historyToken = {
         id,
         status: "paid",
         amount,
@@ -70,7 +126,9 @@ export const useTokensStore = defineStore("tokens", {
         paymentRequest,
         label,
         paymentRequestId,
-      } as HistoryToken);
+      } as HistoryToken;
+      this.historyTokens.push(historyToken);
+      this.persistHistoryToken(historyToken);
       return id;
     },
     addPendingToken({
@@ -88,12 +146,12 @@ export const useTokensStore = defineStore("tokens", {
       mint: string;
       unit: string;
       fee?: number;
-      paymentRequest?: PaymentRequest;
+      paymentRequest?: PaymentRequestData;
       label?: string;
       paymentRequestId?: string;
     }): string {
       const id = uuidv4();
-      this.historyTokens.push({
+      const historyToken = {
         id,
         status: "pending",
         amount,
@@ -105,7 +163,9 @@ export const useTokensStore = defineStore("tokens", {
         paymentRequest,
         label,
         paymentRequestId,
-      });
+      };
+      this.historyTokens.push(historyToken);
+      this.persistHistoryToken(historyToken);
       return id;
     },
     editHistoryToken(
@@ -145,6 +205,7 @@ export const useTokensStore = defineStore("tokens", {
           }
         }
 
+        this.persistHistoryToken(this.historyTokens[index]);
         return this.historyTokens[index];
       }
 
@@ -156,16 +217,43 @@ export const useTokensStore = defineStore("tokens", {
       );
       if (index >= 0) {
         this.historyTokens[index].status = "paid";
+        this.historyTokens[index].paidDate = currentDateStr();
+        this.persistHistoryToken(this.historyTokens[index]);
       }
     },
     deleteToken(token: string) {
       const index = this.historyTokens.findIndex((t) => t.token === token);
       if (index >= 0) {
+        const id = this.historyTokens[index].id;
         this.historyTokens.splice(index, 1);
+        cashuDb.ecashHistory.delete(id).catch((error) => {
+          console.error("Could not delete ecash history token", error);
+        });
       }
     },
     tokenAlreadyInHistory(tokenStr: string): HistoryToken | undefined {
       return this.historyTokens.find((t) => t.token === tokenStr);
+    },
+    async redactOldPaidTokens(maxHistory = 200) {
+      const paidTokens = this.historyTokens
+        .filter((t) => t.status == "paid")
+        .sort((a, b) => {
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+        });
+      if (paidTokens.length <= maxHistory) return;
+      const redactTokens = paidTokens.slice(0, paidTokens.length - maxHistory);
+      const redactIds = new Set(redactTokens.map((token) => token.id));
+      this.historyTokens
+        .filter((token) => redactIds.has(token.id))
+        .forEach((token) => {
+          token.token = undefined;
+        });
+      await cashuDb.transaction("rw", cashuDb.ecashHistory, async () => {
+        for (const token of redactTokens) {
+          await cashuDb.ecashHistory.update(token.id, { token: undefined });
+        }
+      });
+      await this.refreshEcashHistory();
     },
   },
 });

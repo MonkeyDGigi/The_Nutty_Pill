@@ -36,7 +36,7 @@
                   word-break: break-word;
                 "
               >
-                {{ $t("PayInvoiceDialog.input_data.title") || "Pay Lightning" }}
+                {{ dialogTitle }}
               </q-item-label>
             </div>
           </div>
@@ -55,28 +55,37 @@
           </div>
         </div>
 
-        <!-- Mint selection (match SendTokenDialog layout) -->
+        <!-- Mint selection -->
         <div class="row justify-center">
           <div
             class="col-12 col-sm-11 col-md-8 q-px-lg q-mb-sm"
             style="max-width: 600px"
           >
-            <ChooseMint />
+            <ChooseMint
+              v-if="!showNoMintForMethodError"
+              :filter-payment-method="payPaymentMethod"
+              :filter-mint-operation="payMintOperation"
+            />
           </div>
         </div>
 
         <!-- Content area -->
         <div
-          class="col column items-center justify-start q-px-lg scroll-container"
+          class="col column items-center q-px-lg scroll-container invoice-scroll-area"
         >
-          <div class="row justify-center full-width">
+          <div class="row justify-center full-width invoice-main-area">
             <div
-              class="col-12 col-sm-11 col-md-8 q-px-sm q-mb-sm"
+              class="col-12 col-sm-11 col-md-8 q-px-sm q-mb-sm invoice-main-column"
               style="max-width: 600px"
             >
               <!-- INVOICE CONTENT -->
-              <div v-if="payInvoiceData.invoice">
-                <div class="invoice-state-container">
+              <div v-if="payInvoiceData.invoice" class="invoice-content-fill">
+                <div
+                  class="invoice-state-container"
+                  :class="{
+                    'invoice-state-container--centered': showInvoiceErrorState,
+                  }"
+                >
                   <transition name="slide-down">
                     <div :key="invoiceStateKey" class="invoice-state-content">
                       <div v-if="isPaid" class="q-mb-md">
@@ -115,7 +124,7 @@
                           }}
                         </div>
                       </div>
-                      <div v-else-if="isPaying" class="q-mb-md">
+                      <div v-else-if="paymentInProgress" class="q-mb-md">
                         <div class="row">
                           <div class="col-12 text-h4 text-weight-bold q-mb-xs">
                             {{ $t("PayInvoiceDialog.invoice.paying") }}
@@ -166,12 +175,64 @@
                             )
                           }}
                         </div>
-                        <MeltQuoteInformation
-                          v-if="showMeltQuoteInformation"
-                          class="q-mt-sm"
-                          :melt-quote="payInvoiceData.meltQuote.response"
-                          :mint-url="activeMintUrl"
-                        />
+                        <div
+                          v-if="showOnchainFeeOptions"
+                          class="onchain-fee-options q-mt-lg"
+                        >
+                          <div class="text-subtitle2 text-grey-6 q-mb-sm">
+                            Choose confirmation speed
+                          </div>
+                          <div class="q-gutter-y-sm">
+                            <div
+                              v-for="option in onchainFeeOptions"
+                              :key="option.fee_index"
+                              class="fee-option-row"
+                              :class="{
+                                'fee-option-row--selected':
+                                  option.fee_index === selectedOnchainFeeIndex,
+                              }"
+                              @click="selectOnchainFeeOption(option)"
+                            >
+                              <div class="row items-center no-wrap">
+                                <div class="col text-left">
+                                  <div class="text-weight-medium">
+                                    {{ option.estimated_blocks }}
+                                    {{
+                                      option.estimated_blocks === 1
+                                        ? "block"
+                                        : "blocks"
+                                    }}
+                                  </div>
+                                  <div class="text-caption text-grey-6">
+                                    Estimated confirmation
+                                  </div>
+                                </div>
+                                <div class="text-right q-mr-sm">
+                                  <div class="text-weight-bold">
+                                    {{
+                                      formatCurrency(
+                                        option.fee_reserve,
+                                        activeUnit,
+                                        true
+                                      )
+                                    }}
+                                  </div>
+                                  <div class="text-caption text-grey-6">
+                                    fee reserve
+                                  </div>
+                                </div>
+                                <q-icon
+                                  :name="
+                                    option.fee_index === selectedOnchainFeeIndex
+                                      ? 'radio_button_checked'
+                                      : 'radio_button_unchecked'
+                                  "
+                                  color="primary"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                         <p
                           class="text-wrap q-mt-xl"
                           style="max-width: 600px; font-size: 1.1rem"
@@ -188,9 +249,39 @@
                           {{ payInvoiceData.invoice.description }}<br />
                         </p>
                       </div>
-                      <div v-else-if="payInvoiceData.meltQuote.error != ''">
+                      <div
+                        v-else-if="showInvoiceErrorState"
+                        class="invoice-error-state"
+                      >
                         <div class="text-h6 q-my-none">
-                          Error: {{ payInvoiceData.meltQuote.error }}
+                          {{ payInvoiceData.meltQuote.error }}
+                        </div>
+                      </div>
+                      <div v-else-if="showAmountlessPaymentAmountEntry">
+                        <p
+                          v-if="payInvoiceData.invoice.description"
+                          class="text-wrap q-mb-md"
+                          style="max-width: 600px; font-size: 1.1rem"
+                        >
+                          <strong
+                            >{{
+                              $t("PayInvoiceDialog.invoice.memo.label")
+                            }}:</strong
+                          >
+                          {{ payInvoiceData.invoice.description }}
+                        </p>
+                        <div
+                          v-if="showAmountlessPaymentAmountKeyboard"
+                          class="column items-center justify-center q-px-lg q-py-lg amount-area"
+                        >
+                          <AmountInputComponent
+                            v-model="payInvoiceData.input.amount"
+                            :enabled="true"
+                            :muted="insufficientFundsForAmountlessPayment"
+                            :max-amount="amountlessPaymentMaxAmountFromBalance"
+                            @enter="handleAmountlessQuote"
+                            @fiat-mode-changed="fiatKeyboardMode = $event"
+                          />
                         </div>
                       </div>
                       <div v-else>
@@ -208,6 +299,15 @@
                     </div>
                   </transition>
                 </div>
+                <div
+                  v-if="showBottomMeltQuoteInformation"
+                  class="invoice-details-bottom"
+                >
+                  <MeltQuoteInformation
+                    :melt-quote="payInvoiceData.meltQuote.response"
+                    :mint-url="activeMintUrl"
+                  />
+                </div>
               </div>
 
               <!-- LNURL PAY CONTENT -->
@@ -222,6 +322,7 @@
                   <p
                     v-if="payInvoiceData.lnurlpay.lightningAddress"
                     class="q-my-none text-h6 text-center"
+                    style="word-break: break-all"
                   >
                     <i18n-t
                       keypath="PayInvoiceDialog.lnurlpay.sending_to_lightning_address"
@@ -231,7 +332,11 @@
                       </template>
                     </i18n-t>
                   </p>
-                  <p v-else class="q-my-none text-h6 text-center">
+                  <p
+                    v-else
+                    class="q-my-none text-h6 text-center"
+                    style="word-break: break-all"
+                  >
                     <i18n-t
                       keypath="PayInvoiceDialog.lnurlpay.amount_exact_label"
                     >
@@ -290,6 +395,7 @@
                   <p
                     v-if="payInvoiceData.lnurlpay.lightningAddress"
                     class="q-my-none text-h6 text-center"
+                    style="word-break: break-all"
                   >
                     <i18n-t
                       keypath="PayInvoiceDialog.lnurlpay.sending_to_lightning_address"
@@ -299,7 +405,11 @@
                       </template>
                     </i18n-t>
                   </p>
-                  <p v-else class="q-my-none text-h6 text-center">
+                  <p
+                    v-else
+                    class="q-my-none text-h6 text-center"
+                    style="word-break: break-all"
+                  >
                     <i18n-t
                       keypath="PayInvoiceDialog.lnurlpay.amount_range_label"
                     >
@@ -392,7 +502,8 @@
                 <ParseInputComponent
                   v-if="!camera.show"
                   v-model="payInvoiceData.input.request"
-                  :placeholder="$t('ParseInputComponent.placeholder.pay')"
+                  test-id="payment-request-input"
+                  :placeholder="parseInputPlaceholder"
                   :has-camera="hasCameraAvailable"
                   :ndef-supported="false"
                   @update:model-value="decodeAndQuote($event)"
@@ -405,17 +516,37 @@
         </div>
 
         <!-- Bottom fixed pay action -->
-        <div class="bottom-panel" v-if="payInvoiceData.invoice">
+        <div
+          class="bottom-panel"
+          v-if="
+            payInvoiceData.invoice &&
+            (hasMeltQuote || payInvoiceData.meltQuote.error != '')
+          "
+        >
           <div class="row justify-center q-pb-lg q-pt-sm">
             <div
               class="col-12 col-sm-11 col-md-8 q-px-md"
               style="max-width: 600px"
             >
+              <!-- Close button when paid or error -->
+              <template v-if="isPaid || payInvoiceData.meltQuote.error != ''">
+                <q-btn
+                  class="full-width"
+                  unelevated
+                  size="lg"
+                  color="primary"
+                  rounded
+                  @click="closeDialog"
+                  :label="$t('PayInvoiceDialog.invoice.actions.close.label')"
+                />
+              </template>
+              <!-- Pay button when ready to pay -->
               <template
-                v-if="
+                v-else-if="
                   enoughtotalUnitBalance ||
                   (hasMultinutSupport && multinutEnabled) ||
-                  globalMutexLock
+                  waitingForWallet ||
+                  paymentInProgress
                 "
               >
                 <q-btn
@@ -424,25 +555,33 @@
                   size="lg"
                   color="primary"
                   rounded
+                  data-testid="pay-payment-request"
                   :disabled="
                     payInvoiceData.blocking ||
-                    payInvoiceData.meltQuote.error != ''
+                    waitingForWallet ||
+                    paymentInProgress
                   "
                   @click="handleMeltButton"
-                  :label="
-                    payInvoiceData.meltQuote.error != ''
-                      ? $t('PayInvoiceDialog.invoice.actions.pay.error')
-                      : !payInvoiceData.blocking
-                      ? $t('PayInvoiceDialog.invoice.actions.pay.label')
-                      : $t('PayInvoiceDialog.invoice.actions.pay.in_progress')
-                  "
-                  :loading="globalMutexLock && !payInvoiceData.blocking"
+                  :label="paymentButtonLabel"
+                  :loading="waitingForWallet || paymentInProgress"
                 >
                   <template v-slot:loading>
-                    <q-spinner />
+                    <q-spinner class="q-mr-sm" />
+                    <span>{{ paymentButtonLabel }}</span>
                   </template>
                 </q-btn>
+                <q-btn
+                  v-if="hasMultinutSupport && multinutEnabled"
+                  class="full-width q-mt-sm"
+                  flat
+                  size="md"
+                  color="primary"
+                  rounded
+                  @click="openMultinutDialog"
+                  label="Pay with multiple mints"
+                />
               </template>
+              <!-- Balance too low -->
               <template v-else>
                 <q-btn
                   class="full-width"
@@ -458,6 +597,58 @@
                   }}
                 </q-btn>
               </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom fixed amountless payment quote action -->
+        <div
+          class="bottom-panel"
+          v-if="showAmountlessPaymentAmountKeyboard && payInvoiceData.invoice"
+        >
+          <div class="keypad-wrapper">
+            <NumericKeyboard
+              :force-visible="true"
+              :hide-close="true"
+              :hide-enter="true"
+              :hide-comma="
+                (activeUnit === 'sat' || activeUnit === 'msat') &&
+                !fiatKeyboardMode
+              "
+              :model-value="String(payInvoiceData.input.amount ?? 0)"
+              @update:modelValue="
+                (val: string | number) =>
+                  (payInvoiceData.input.amount = Number(val))
+              "
+              @done="handleAmountlessQuote"
+            />
+          </div>
+          <div class="row justify-center q-pb-lg q-pt-sm">
+            <div
+              class="col-12 col-sm-11 col-md-8 q-px-md"
+              style="max-width: 600px"
+            >
+              <q-btn
+                class="full-width"
+                unelevated
+                size="lg"
+                color="primary"
+                rounded
+                data-testid="quote-payment-request"
+                @click="handleAmountlessQuote"
+                :disabled="
+                  payInvoiceData.blocking ||
+                  payInvoiceData.input.amount == null ||
+                  payInvoiceData.input.amount <= 0 ||
+                  insufficientFundsForAmountlessPayment
+                "
+                :loading="payInvoiceData.blocking"
+              >
+                Quote
+                <template v-slot:loading>
+                  <q-spinner />
+                </template>
+              </q-btn>
             </div>
           </div>
         </div>
@@ -578,10 +769,13 @@
 import { defineComponent } from "vue";
 import { useWalletStore } from "src/stores/wallet";
 import { useUiStore } from "src/stores/ui";
+import { useEducationStore } from "src/stores/education";
 import { useCameraStore } from "src/stores/camera";
 import { useMintsStore, MintClass } from "src/stores/mints";
+import type { StoredMint } from "src/stores/mints";
 import { useSettingsStore } from "src/stores/settings";
 import { usePriceStore } from "src/stores/price";
+import { useProofsStore } from "src/stores/proofs";
 import { mapActions, mapState, mapWritableState } from "pinia";
 import ChooseMint from "components/ChooseMint.vue";
 import MultinutPaymentDialog from "./MultinutPaymentDialog.vue";
@@ -589,9 +783,10 @@ import MeltQuoteInformation from "components/MeltQuoteInformation.vue";
 import NumericKeyboard from "components/NumericKeyboard.vue";
 import AmountInputComponent from "components/AmountInputComponent.vue";
 import ParseInputComponent from "components/ParseInputComponent.vue";
+import { mintsSupportingPaymentMethod } from "src/js/mint-payment-methods";
+import { PaymentMethod } from "src/stores/walletTypes";
 
 import * as _ from "underscore";
-import { Proof } from "@cashu/cashu-ts";
 
 declare const windowMixin: any;
 
@@ -612,17 +807,46 @@ export default defineComponent({
       fiatKeyboardMode: false as boolean,
       isPaying: false as boolean,
       isPaid: false as boolean,
+      waitingForWallet: false as boolean,
+      autoCloseTimeout: null as ReturnType<typeof setTimeout> | null,
     };
   },
   watch: {
     activeMintUrl: async function () {
-      if (this.payInvoiceData.show && this.payInvoiceData.invoice) {
+      if (
+        this.payInvoiceData.show &&
+        this.payInvoiceData.invoice &&
+        !this.showAmountlessPaymentAmountEntry
+      ) {
         await this.meltQuoteInvoiceData();
       }
     },
     activeUnit: async function () {
-      if (this.payInvoiceData.show && this.payInvoiceData.invoice) {
+      if (
+        this.payInvoiceData.show &&
+        this.payInvoiceData.invoice &&
+        !this.showAmountlessPaymentAmountEntry
+      ) {
         await this.meltQuoteInvoiceData();
+      }
+    },
+    showAmountlessPaymentAmountEntry: {
+      handler: function (val) {
+        if (val && this.payInvoiceData.meltQuote.error == "") {
+          this.showNumericKeyboard = true;
+        }
+      },
+      immediate: true,
+    },
+    "payInvoiceData.meltQuote.error": function (val) {
+      if (val && this.showAmountlessPaymentAmountEntry) {
+        this.showNumericKeyboard = false;
+      }
+    },
+    "payInvoiceData.paying": function (val) {
+      if (val) {
+        this.waitingForWallet = false;
+        this.isPaying = true;
       }
     },
     "payInvoiceData.lnurlpay": {
@@ -653,11 +877,20 @@ export default defineComponent({
           this.payInvoiceData.show = true; // Prevent close
 
           // Wait 2 seconds then allow close
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          this.isPaid = false;
-          this.payInvoiceData.show = false;
+          this.autoCloseTimeout = setTimeout(() => {
+            if (this.isPaid) {
+              // Only auto-close if still in paid state (user hasn't manually closed)
+              this.isPaid = false;
+              this.payInvoiceData.show = false;
+            }
+            this.autoCloseTimeout = null;
+          }, 10000);
         } else if (!val) {
-          // Normal close - reset states
+          // Normal close - reset states and clear any pending timeout
+          if (this.autoCloseTimeout) {
+            clearTimeout(this.autoCloseTimeout);
+            this.autoCloseTimeout = null;
+          }
           this.showNumericKeyboard = false;
           this.isPaying = false;
           this.isPaid = false;
@@ -666,7 +899,7 @@ export default defineComponent({
     },
   },
   computed: {
-    ...mapState(useUiStore, ["tickerShort", "globalMutexLock"]),
+    ...mapState(useUiStore, ["tickerShort"]),
     ...mapState(useSettingsStore, ["multinutEnabled"]),
     ...mapWritableState(useCameraStore, ["camera", "hasCamera"]),
     ...mapWritableState(useUiStore, ["showNumericKeyboard"]),
@@ -690,7 +923,11 @@ export default defineComponent({
       return (useMintsStore() as any).totalUnitBalance;
     },
     activeBalance: function (): any {
-      return (useMintsStore() as any).activeBalance;
+      const mintStore = useMintsStore() as any;
+      return Math.min(
+        mintStore.activeBalance,
+        useEducationStore().spendableBalance(mintStore.activeUnit)
+      );
     },
     multiMints: function (): any {
       return (useMintsStore() as any).multiMints;
@@ -733,9 +970,134 @@ export default defineComponent({
         typeof paidRaw !== "boolean";
       return hasAmount || hasFeeReserve || hasFeePaid || hasPaidTimestamp;
     },
+    showBottomMeltQuoteInformation: function (): boolean {
+      return (
+        this.showMeltQuoteInformation &&
+        this.hasMeltQuote &&
+        !this.isPaid &&
+        !this.paymentInProgress
+      );
+    },
+    showOnchainFeeOptions: function (): boolean {
+      return this.isOnchainPay && this.onchainFeeOptions.length > 0;
+    },
+    onchainFeeOptions: function (): any[] {
+      const options = this.payInvoiceData?.meltQuote?.response?.fee_options;
+      return Array.isArray(options) ? options : [];
+    },
+    selectedOnchainFeeIndex: function (): number | null {
+      const quote = this.payInvoiceData?.meltQuote?.response;
+      return (
+        quote?.selected_fee_index ??
+        this.onchainFeeOptions[0]?.fee_index ??
+        null
+      );
+    },
+    hasMeltQuote: function (): boolean {
+      const quote = this.payInvoiceData?.meltQuote?.response;
+      return Boolean(quote?.quote) && quote.amount > 0;
+    },
+    payPaymentMethod: function (): PaymentMethod | null {
+      if (!this.payInvoiceData?.invoice) return null;
+      if (this.payInvoiceData.invoice.onchain) {
+        return PaymentMethod.Onchain;
+      }
+      if (this.payInvoiceData.invoice.bolt12) {
+        return PaymentMethod.Bolt12;
+      }
+      return PaymentMethod.Bolt11;
+    },
+    dialogTitle: function (): string {
+      if (
+        this.payPaymentMethod === PaymentMethod.Onchain ||
+        this.payInvoiceData.paymentMethod === PaymentMethod.Onchain
+      ) {
+        return "Pay On-chain";
+      }
+      if (this.payPaymentMethod === PaymentMethod.Bolt12) {
+        return this.$t("PayInvoiceDialog.input_data.title_bolt12");
+      }
+      return this.$t("PayInvoiceDialog.input_data.title");
+    },
+    parseInputPlaceholder: function (): string {
+      if (this.payInvoiceData.paymentMethod === PaymentMethod.Onchain) {
+        return "Bitcoin address";
+      }
+      return this.$t("ParseInputComponent.placeholder.pay");
+    },
+    payMintOperation: function (): "mint" | "melt" {
+      return "melt";
+    },
+    hasMintForPayMethod: function (): boolean {
+      if (!this.payPaymentMethod) return true;
+      return (
+        mintsSupportingPaymentMethod(
+          this.mints as StoredMint[],
+          this.payPaymentMethod,
+          this.payMintOperation,
+          this.activeUnit
+        ).length > 0
+      );
+    },
+    showNoMintForMethodError: function (): boolean {
+      return this.payPaymentMethod != null && !this.hasMintForPayMethod;
+    },
+    paymentInProgress: function (): boolean {
+      return Boolean(this.isPaying || this.payInvoiceData?.paying);
+    },
+    paymentButtonLabel: function (): string {
+      if (this.waitingForWallet) {
+        return this.$t(
+          "PayInvoiceDialog.invoice.actions.pay.waiting_for_wallet"
+        ) as string;
+      }
+      if (this.paymentInProgress) {
+        return this.$t(
+          "PayInvoiceDialog.invoice.actions.pay.in_progress"
+        ) as string;
+      }
+      return this.$t("PayInvoiceDialog.invoice.actions.pay.label") as string;
+    },
+    isBolt12Pay: function (): boolean {
+      return this.payPaymentMethod === PaymentMethod.Bolt12;
+    },
+    isOnchainPay: function (): boolean {
+      return this.payPaymentMethod === PaymentMethod.Onchain;
+    },
+    showAmountlessPaymentAmountEntry: function (): boolean {
+      return (
+        (this.isBolt12Pay || this.isOnchainPay) &&
+        this.hasMintForPayMethod &&
+        !this.hasMeltQuote &&
+        !this.payInvoiceData.blocking &&
+        !this.isPaid &&
+        !this.paymentInProgress &&
+        this.payInvoiceData.meltQuote.error == ""
+      );
+    },
+    showInvoiceErrorState: function (): boolean {
+      if (
+        !this.payInvoiceData.invoice ||
+        this.isPaid ||
+        this.paymentInProgress ||
+        this.hasMeltQuote
+      ) {
+        return false;
+      }
+      return this.payInvoiceData.meltQuote.error != "";
+    },
+    showAmountlessPaymentAmountKeyboard: function (): boolean {
+      return (
+        this.showAmountlessPaymentAmountEntry &&
+        this.payInvoiceData.meltQuote.error == ""
+      );
+    },
     enoughtotalUnitBalance: function () {
       return (
-        this.activeBalance >= this.payInvoiceData.meltQuote.response.amount
+        this.hasMeltQuote &&
+        this.activeBalance >=
+          this.payInvoiceData.meltQuote.response.amount +
+            this.payInvoiceData.meltQuote.response.fee_reserve
       );
     },
     hasMultinutSupport: function (): boolean {
@@ -753,6 +1115,21 @@ export default defineComponent({
     activeUnitLabel: function (): string {
       // Access directly from store to avoid typing friction in mapState
       return (useMintsStore() as any).activeUnitLabel;
+    },
+    insufficientFundsForAmountlessPayment: function (): boolean {
+      if (
+        !this.showAmountlessPaymentAmountEntry ||
+        this.payInvoiceData.input.amount == null
+      ) {
+        return false;
+      }
+      return (
+        this.activeBalance <
+        this.payInvoiceData.input.amount * this.activeUnitCurrencyMultiplyer
+      );
+    },
+    amountlessPaymentMaxAmountFromBalance: function (): number {
+      return this.activeBalance / this.activeUnitCurrencyMultiplyer;
     },
     insufficientFunds: function (): boolean {
       if (
@@ -776,15 +1153,14 @@ export default defineComponent({
     invoiceStateKey: function (): string {
       if (this.isPaid) {
         return "paid";
-      } else if (this.isPaying) {
+      } else if (this.paymentInProgress) {
         return "paying";
-      } else if (
-        this.payInvoiceData.meltQuote.response &&
-        this.payInvoiceData.meltQuote.response.amount > 0
-      ) {
+      } else if (this.hasMeltQuote) {
         return "success";
-      } else if (this.payInvoiceData.meltQuote.error != "") {
+      } else if (this.showInvoiceErrorState) {
         return "error";
+      } else if (this.showAmountlessPaymentAmountEntry) {
+        return "amount";
       } else {
         return "processing";
       }
@@ -811,6 +1187,16 @@ export default defineComponent({
       );
     },
     closeParseDialog: function () {},
+    closeDialog: function () {
+      // Clear any pending auto-close timeout
+      if (this.autoCloseTimeout) {
+        clearTimeout(this.autoCloseTimeout);
+        this.autoCloseTimeout = null;
+      }
+      this.payInvoiceData.show = false;
+      this.isPaying = false;
+      this.isPaid = false;
+    },
     decodeAndQuote: async function (request: string) {
       await this.decodeRequest(request);
     },
@@ -823,16 +1209,27 @@ export default defineComponent({
       }
     },
     handleMeltButton: async function () {
-      if (this.payInvoiceData.blocking) {
+      if (
+        this.payInvoiceData.blocking ||
+        this.waitingForWallet ||
+        this.paymentInProgress
+      ) {
         throw new Error("already processing an invoice.");
       }
-      this.isPaying = true;
+      if (
+        !this.enoughtotalUnitBalance &&
+        this.hasMultinutSupport &&
+        this.multinutEnabled
+      ) {
+        this.openMultinutDialog();
+        return;
+      }
+      const uiStore = useUiStore();
+      this.waitingForWallet = true;
+      uiStore.beginForegroundPayment();
       try {
-        const result = await this.meltInvoiceData(true);
-        const returnedChange = result.change.reduce(
-          (acc: number, p: Proof) => acc + p.amount,
-          0
-        );
+        const result = await this.meltInvoiceData(true, "foreground");
+        const returnedChange = useProofsStore().sumProofs(result?.change ?? []);
         this.payInvoiceData.fee_paid =
           this.payInvoiceData.meltQuote.response.fee_reserve - returnedChange;
         console.log("### fee_paid", this.payInvoiceData.fee_paid);
@@ -841,6 +1238,9 @@ export default defineComponent({
         // Error handling is done in the store, but we ensure isPaying is reset
         console.error("Payment error:", error);
         this.isPaying = false;
+      } finally {
+        this.waitingForWallet = false;
+        uiStore.endForegroundPayment();
       }
     },
     openMultinutDialog: function () {
@@ -854,6 +1254,29 @@ export default defineComponent({
       // Hide keyboard before sending payment
       this.showNumericKeyboard = false;
       await this.lnurlPaySecond();
+    },
+    handleAmountlessQuote: async function () {
+      if (
+        this.payInvoiceData.blocking ||
+        this.payInvoiceData.input.amount == null ||
+        this.payInvoiceData.input.amount <= 0 ||
+        this.insufficientFundsForAmountlessPayment
+      ) {
+        return;
+      }
+      await this.meltQuoteInvoiceData();
+      if (this.isOnchainPay && this.onchainFeeOptions.length) {
+        this.selectOnchainFeeOption(this.onchainFeeOptions[0]);
+      }
+      if (this.hasMeltQuote || this.payInvoiceData.meltQuote.error != "") {
+        this.showNumericKeyboard = false;
+      }
+    },
+    selectOnchainFeeOption: function (option: any) {
+      const quote = this.payInvoiceData?.meltQuote?.response;
+      if (!quote || option == null) return;
+      quote.selected_fee_index = option.fee_index;
+      quote.fee_reserve = option.fee_reserve;
     },
   },
   created: function () {},
@@ -935,6 +1358,45 @@ export default defineComponent({
   overflow-x: hidden;
 }
 
+.invoice-scroll-area {
+  flex: 1;
+  min-height: 0;
+}
+
+.invoice-main-area {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.invoice-main-column {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.invoice-content-fill {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.invoice-error-state {
+  text-align: center;
+  padding: 0 16px;
+  width: 100%;
+}
+
+.invoice-details-bottom {
+  width: 100%;
+  margin-top: auto;
+  padding-top: 16px;
+  padding-bottom: clamp(20px, 4vh, 36px);
+}
+
 .relative-container {
   position: relative;
 }
@@ -972,10 +1434,38 @@ export default defineComponent({
 .invoice-state-container {
   position: relative;
   min-height: 100px;
+
+  &--centered {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
 }
 
 .invoice-state-content {
   width: 100%;
+}
+
+.onchain-fee-options {
+  width: 100%;
+}
+
+.onchain-fee-options .text-subtitle2 {
+  margin-bottom: 12px;
+}
+
+.fee-option-row {
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 14px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.fee-option-row--selected {
+  background: rgba(var(--q-primary-rgb), 0.12);
+  color: var(--q-primary);
 }
 
 .slide-down-enter-active {

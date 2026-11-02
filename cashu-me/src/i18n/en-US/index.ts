@@ -76,12 +76,18 @@ export default {
       received_lightning: "Received {amount} via Lightning",
       lightning_payment_failed: "Lightning payment failed",
       failed_to_decode_invoice: "Failed to decode invoice",
+      unsupported_legacy_qr: "Unsupported Legacy QR code",
+      legacy_qr_not_supported:
+        "This Legacy QR code is not from a supported merchant",
       invalid_lnurl: "Invalid LNURL",
       lnurl_error: "LNURL Error",
       no_amount: "No amount",
       no_lnurl_data: "No LNURL data",
       no_price_data: "No price data.",
       please_try_again: "Please try again.",
+      trying_again: "Trying again...",
+      no_bolt12_mint: "None of your mints support BOLT12 offers",
+      no_bolt11_mint: "None of your mints support BOLT11 invoices",
     },
     mint: {
       notifications: {
@@ -167,6 +173,61 @@ export default {
     },
   },
   Settings: {
+    menu: {
+      title: "Settings",
+      backup: {
+        title: "Backup & Restore",
+        caption: "Seed phrase and ecash recovery",
+      },
+      lightning_address: {
+        title: "Lightning Address",
+        caption: "Receive payments to your Lightning address",
+      },
+      nostr: {
+        title: "Nostr",
+        caption: "Keys, relays, and Web of Trust",
+      },
+      payment_requests: {
+        title: "Payment Requests",
+        caption: "Receive ecash payments via nostr",
+      },
+      nwc: {
+        title: "Nostr Wallet Connect",
+        caption: "Use your wallet from other apps",
+      },
+      hardware: {
+        title: "Hardware",
+        caption: "NFC card settings",
+      },
+      p2pk: {
+        title: "P2PK",
+        caption: "Receive ecash locked to your keys",
+      },
+      privacy: {
+        title: "Privacy",
+        caption: "Network checks and Bitcoin price",
+      },
+      experimental: {
+        title: "Experimental",
+        caption: "Try new features early",
+      },
+      appearance: {
+        title: "Appearance",
+        caption: "Theme, keyboard, and Bitcoin symbol",
+      },
+      language: {
+        title: "Language",
+        caption: "Choose your language",
+      },
+      advanced: {
+        title: "Advanced",
+        caption: "Developer tools and wallet reset",
+      },
+      about: {
+        title: "About",
+        caption: "Terms and links",
+      },
+    },
     language: {
       title: "Language",
       description: "Please choose your preferred language from the list below.",
@@ -224,13 +285,18 @@ export default {
       address: {
         copy_tooltip: "Copy Lightning address",
       },
+      show_on_receive: {
+        toggle: "Show when receiving",
+        description: "Show address and QR code.",
+      },
       automatic_claim: {
         toggle: "Claim automatically",
         description: "Receive incoming payments automatically.",
       },
-      npc_v2: {
-        choose_mint_title: "Choose mint for npub.cash v2",
-        choose_mint_placeholder: "Select a mint...",
+      mint: {
+        label: "npub.cash mint",
+        choose_title: "Choose mint for npub.cash",
+        choose_placeholder: "Select a mint...",
       },
     },
     nostr_keys: {
@@ -330,7 +396,7 @@ export default {
       check_startup: {
         toggle: "Check pending invoices on startup",
         description:
-          "If enabled, the wallet will check pending invoices from the last 24 hours on startup.",
+          "If enabled, the wallet will check pending invoices on startup.",
       },
       check_all: {
         toggle: "Check all invoices",
@@ -435,9 +501,7 @@ export default {
       progress: "{crawlProcessed} / {crawlTotal}",
     },
     npub_cash: {
-      use_npubx: "Use npubx.cash",
       copy_lightning_address: "Copy Lightning address",
-      v2_mint: "npub.cash v2 mint",
     },
     multinut: {
       use_multinut: "Use Multinut",
@@ -820,7 +884,7 @@ export default {
         error: "Failed to read clipboard contents.",
       },
       validate: {
-        error: "Mnemonic should be at least 12 words.",
+        error: "Mnemonic is not a valid BIP39 seed phrase.",
       },
       select_all: {
         label: "Select All",
@@ -1042,6 +1106,7 @@ export default {
       },
       send: {
         label: "@:global.actions.send.label",
+        in_progress: "Sending…",
       },
       delete: {
         tooltip_text: "Delete from history",
@@ -1056,6 +1121,8 @@ export default {
     errors: {
       amount_required: "Enter an amount first.",
       serialization_failed: "Could not prepare ecash token.",
+      mint_not_allowed_by_request:
+        "The selected mint is not accepted by this payment request.",
     },
   },
   SendPaymentRequest: {
@@ -1402,6 +1469,7 @@ export default {
   PayInvoiceDialog: {
     input_data: {
       title: "Pay Lightning",
+      title_bolt12: "Pay Lightning Bolt12",
       inputs: {
         invoice_data: {
           label: "Lightning invoice or address",
@@ -1461,6 +1529,7 @@ export default {
         pay: {
           label: "Pay",
           in_progress: "@:PayInvoiceDialog.invoice.processing_info_text",
+          waiting_for_wallet: "Waiting for wallet…",
           error: "Error",
         },
       },
@@ -1488,7 +1557,9 @@ export default {
   AddMintDialog: {
     title: "Do you trust this mint?",
     description:
-      "Before using this mint, make sure you trust it. Mints could become malicious or cease operation at any time.",
+      "Join this mint only if you trust it. Mints can cease operations at any time.",
+    unreachable_error_text:
+      "This mint is not reachable. Check the URL and your connection, then try again.",
     inputs: {
       mint_url: {
         label: "@:global.inputs.mint_url.label",
@@ -1501,6 +1572,17 @@ export default {
       add_mint: {
         label: "@:global.actions.add_mint.label",
         in_progress: "Adding mint",
+      },
+    },
+    audit_info: {
+      label: "Audit info",
+      actions: {
+        show: {
+          label: "Show",
+        },
+        hide: {
+          label: "Hide",
+        },
       },
     },
   },

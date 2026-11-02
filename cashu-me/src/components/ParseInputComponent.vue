@@ -1,9 +1,10 @@
 <template>
   <div class="column q-mt-md">
     <!-- Input field with paste button -->
-    <div class="input-with-paste-wrapper">
+    <div class="input-with-paste-wrapper" :data-testid="testId">
       <q-input
         ref="inputRef"
+        :aria-label="computedPlaceholder"
         filled
         borderless
         :class="[
@@ -88,6 +89,10 @@ export default defineComponent({
       type: Boolean,
       default: true,
     },
+    testId: {
+      type: String,
+      default: "parse-input",
+    },
     hasCamera: {
       type: Boolean,
       default: false,
@@ -134,7 +139,7 @@ export default defineComponent({
 }
 
 .parse-input {
-  ::v-deep .q-field__control {
+  :deep(.q-field__control) {
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.06);
     min-height: 120px;
@@ -147,28 +152,28 @@ export default defineComponent({
     }
   }
 
-  ::v-deep .q-field__native {
+  :deep(.q-field__native) {
     padding: 0;
     font-size: 16px;
     color: white;
     min-height: 88px;
   }
 
-  &.has-paste-button ::v-deep .q-field__native {
+  &.has-paste-button :deep(.q-field__native) {
     padding: 0 70px 0 0;
   }
 
-  ::v-deep .q-placeholder {
+  :deep(.q-placeholder) {
     color: rgba(255, 255, 255, 0.5);
     font-size: 16px;
   }
 
-  ::v-deep .q-field__control:before,
-  ::v-deep .q-field__control:after {
+  :deep(.q-field__control:before),
+  :deep(.q-field__control:after) {
     display: none !important;
   }
 
-  ::v-deep .q-field__bottom {
+  :deep(.q-field__bottom) {
     display: none;
   }
 }

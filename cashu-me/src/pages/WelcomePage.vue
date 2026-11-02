@@ -79,6 +79,7 @@
         <q-btn
           flat
           icon="arrow_right"
+          data-testid="onboarding-next"
           :label="$t('WelcomePage.actions.next.label')"
           :disable="!canProceed"
           @click="goToNextSlide"
@@ -292,6 +293,8 @@ export default {
         { label: "Italiano", value: "it-IT" },
         { label: "Deutsch", value: "de-DE" },
         { label: "Français", value: "fr-FR" },
+        { label: "Čeština", value: "cs-CZ" },
+        { label: "Português (Brasil)", value: "pt-BR" },
         { label: "Svenska", value: "sv-SE" },
         { label: "Ελληνικά", value: "el-GR" },
         { label: "Türkçe", value: "tr-TR" },

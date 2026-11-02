@@ -77,6 +77,7 @@ export default {
       no_lnurl_data: "لا توجد بيانات LNURL",
       no_price_data: "لا توجد بيانات سعرية.",
       please_try_again: "يرجى المحاولة مرة أخرى.",
+      trying_again: "جارٍ إعادة المحاولة...",
     },
     mint: {
       notifications: {
@@ -162,6 +163,61 @@ export default {
     },
   },
   Settings: {
+    menu: {
+      title: "الإعدادات",
+      backup: {
+        title: "النسخ الاحتياطي والاستعادة",
+        caption: "عبارة البذرة واستعادة الإيكاش",
+      },
+      lightning_address: {
+        title: "عنوان Lightning",
+        caption: "استقبل المدفوعات على عنوان Lightning الخاص بك",
+      },
+      nostr: {
+        title: "Nostr",
+        caption: "المفاتيح والمرحّلات وشبكة الثقة",
+      },
+      payment_requests: {
+        title: "طلبات الدفع",
+        caption: "استقبل مدفوعات الإيكاش عبر nostr",
+      },
+      nwc: {
+        title: "اتصال محفظة Nostr",
+        caption: "استخدم محفظتك من تطبيقات أخرى",
+      },
+      hardware: {
+        title: "الأجهزة",
+        caption: "إعدادات NFC",
+      },
+      p2pk: {
+        title: "P2PK",
+        caption: "استقبل إيكاش مقفلًا بمفاتيحك",
+      },
+      privacy: {
+        title: "الخصوصية",
+        caption: "فحوصات الشبكة وسعر البيتكوين",
+      },
+      experimental: {
+        title: "تجريبي",
+        caption: "جرّب الميزات الجديدة مبكرًا",
+      },
+      appearance: {
+        title: "المظهر",
+        caption: "السمة ولوحة المفاتيح ورمز البيتكوين",
+      },
+      language: {
+        title: "اللغة",
+        caption: "اختر لغتك",
+      },
+      advanced: {
+        title: "متقدم",
+        caption: "أدوات المطورين وإعادة تعيين المحفظة",
+      },
+      about: {
+        title: "حول",
+        caption: "الشروط والروابط",
+      },
+    },
     language: {
       title: "اللغة",
       description: "الرجاء اختيار لغتك المفضلة من القائمة أدناه.",
@@ -219,13 +275,18 @@ export default {
       address: {
         copy_tooltip: "نسخ عنوان Lightning",
       },
+      show_on_receive: {
+        toggle: "إظهار عند الاستلام",
+        description: "إظهار العنوان ورمز QR.",
+      },
       automatic_claim: {
         toggle: "المطالبة تلقائيًا",
         description: "استلام المدفوعات الواردة تلقائيًا.",
       },
-      npc_v2: {
-        choose_mint_title: "اختر mint لـ npub.cash v2",
-        choose_mint_placeholder: "حدد mint...",
+      mint: {
+        label: "mint لـ npub.cash",
+        choose_title: "اختر mint لـ npub.cash",
+        choose_placeholder: "حدد mint...",
       },
     },
     nostr_keys: {
@@ -324,7 +385,7 @@ export default {
       check_startup: {
         toggle: "التحقق من الفواتير المعلقة عند بدء التشغيل",
         description:
-          "إذا تم تمكين هذا، ستقوم المحفظة بفحص الفواتير المعلقة من آخر 24 ساعة عند بدء التشغيل.",
+          "إذا تم تمكين هذا، ستقوم المحفظة بفحص الفواتير المعلقة عند بدء التشغيل.",
       },
       check_all: {
         toggle: "التحقق من جميع الفواتير",
@@ -429,9 +490,7 @@ export default {
       progress: "{crawlProcessed} / {crawlTotal}",
     },
     npub_cash: {
-      use_npubx: "استخدام npubx.cash",
       copy_lightning_address: "نسخ عنوان Lightning",
-      v2_mint: "npub.cash v2 mint",
     },
     multinut: {
       use_multinut: "استخدام Multinut",
@@ -986,6 +1045,7 @@ export default {
       },
       send: {
         label: "@:global.actions.send.label",
+        in_progress: "جارٍ الإرسال…",
       },
       delete: {
         tooltip_text: "حذف من السجل",
@@ -1360,6 +1420,7 @@ export default {
         pay: {
           label: "دفع",
           in_progress: "@:PayInvoiceDialog.invoice.processing_info_text",
+          waiting_for_wallet: "بانتظار المحفظة…",
           error: "خطأ",
         },
       },
@@ -1387,7 +1448,7 @@ export default {
   AddMintDialog: {
     title: "هل تثق في هذا الـ mint؟",
     description:
-      "قبل استخدام هذا الـ mint، تأكد من أنك تثق به. قد يصبح الـ mints ضارًا أو يتوقف عن العمل في أي وقت.",
+      "انضم إلى هذا الـ mint فقط إذا كنت تثق به. يمكن أن تتوقف الـ mints عن العمل في أي وقت.",
     inputs: {
       mint_url: {
         label: "@:global.inputs.mint_url.label",
@@ -1400,6 +1461,17 @@ export default {
       add_mint: {
         label: "@:global.actions.add_mint.label",
         in_progress: "إضافة mint",
+      },
+    },
+    audit_info: {
+      label: "معلومات التدقيق",
+      actions: {
+        show: {
+          label: "عرض",
+        },
+        hide: {
+          label: "إخفاء",
+        },
       },
     },
   },

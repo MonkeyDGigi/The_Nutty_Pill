@@ -299,7 +299,9 @@ import { mapActions, mapState, mapWritableState } from "pinia";
 import { useMintsStore, MintClass } from "src/stores/mints";
 import { useWalletStore } from "src/stores/wallet";
 import { useUiStore } from "src/stores/ui";
+import { useEducationStore } from "src/stores/education";
 import { notifyError, notifySuccess } from "src/js/notify";
+import { sumProofAmounts } from "src/js/proofs";
 import { getShortUrl } from "src/js/wallet-helpers";
 
 export default defineComponent({
@@ -732,7 +734,7 @@ export default defineComponent({
           if (partialAmounts[largestMint.url] > mintBalance) {
             // If the largest mint can't handle the adjustment, distribute the difference
             partialAmounts[largestMint.url] = mintBalance;
-            const remainingDifference =
+            let remainingDifference =
               difference - (mintBalance - largestAmount);
 
             // Find other mints that can handle the remaining difference
@@ -863,8 +865,7 @@ export default defineComponent({
       this.multiMeltButtonLoading = true;
 
       let mintsToQuotes = [];
-      let mintsToAmounts = [];
-      let remainder = 0.0;
+      const mintsToAmounts = [];
       let data;
 
       try {
@@ -909,9 +910,10 @@ export default defineComponent({
               return null;
             }
             console.log(`Quoting mint: ${mint.url}`);
-            const mintWallet = useWalletStore().mintWallet(
+            const mintWallet = await useWalletStore().mintWallet(
               mint.url,
-              useMintsStore().activeUnit
+              useMintsStore().activeUnit,
+              true
             );
             try {
               this.setMintState(mint.url, "requesting");
@@ -933,15 +935,28 @@ export default defineComponent({
         // Filter out null values (for mints with partialAmount <= 0)
         mintsToQuotes = mintsToQuotes.filter((item) => item !== null);
 
+        // Check the whole payment up front, so it can't fail halfway through
+        const totalCost = mintsToQuotes.reduce(
+          (acc, q) => acc + q[1].amount + q[1].fee_reserve,
+          0
+        );
+        if (totalCost > useEducationStore().spendableBalance(activeUnit)) {
+          notifyError(
+            this.$t("PayInvoiceDialog.invoice.balance_too_low_warning_text")
+          );
+          throw new Error("not enough unlocked sats");
+        }
+
         // Phase 3: Execute payments
         data = await Promise.all(
           mintsToQuotes.map(async ([mint, quote]) => {
             try {
               // Move to paying state
               this.setMintState(mint.url, "paying");
-              const mintWallet = useWalletStore().mintWallet(
+              const mintWallet = await useWalletStore().mintWallet(
                 mint.url,
-                activeUnit
+                activeUnit,
+                true
               );
               const mintClass = new MintClass(mint);
               const proofs = mintClass.unitProofs(activeUnit);
@@ -982,11 +997,7 @@ export default defineComponent({
         mintsToQuotes.reduce(
           (acc, q) => acc + q[1].amount + q[1].fee_reserve,
           0
-        ) -
-        data.reduce(
-          (acc, d) => acc + d.change.reduce((acc1, p) => acc1 + p.amount, 0),
-          0
-        );
+        ) - data.reduce((acc, d) => acc + sumProofAmounts(d.change), 0);
 
       notifySuccess(
         "Paid " +

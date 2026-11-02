@@ -70,6 +70,24 @@
           </div>
         </div>
 
+        <!-- Mint selection -->
+        <div class="row justify-center">
+          <div
+            class="col-12 col-sm-11 col-md-8 q-px-lg q-mb-sm"
+            style="max-width: 600px"
+          >
+            <ChooseMint v-if="paymentRequestMintWarning" />
+            <q-banner
+              v-if="paymentRequestMintWarning"
+              dense
+              rounded
+              class="bg-red-1 text-red-9 q-mt-sm"
+            >
+              {{ paymentRequestMintWarning }}
+            </q-banner>
+          </div>
+        </div>
+
         <!-- Amount display -->
         <div class="col column items-center justify-center q-px-lg amount-area">
           <!-- Floating P2PK input overlay -->
@@ -222,21 +240,26 @@
                 unelevated
                 size="lg"
                 :disable="
+                  sendingEcash ||
                   sendData.amount == null ||
                   sendData.amount <= 0 ||
                   insufficientFunds ||
                   (sendData.p2pkPubkey != '' &&
                     !isValidPubkey(sendData.p2pkPubkey))
                 "
+                data-testid="send-ecash"
                 @click="sendTokens"
                 color="primary"
                 rounded
                 type="submit"
-                :loading="globalMutexLock"
+                :loading="sendingEcash"
               >
                 {{ $t("SendTokenDialog.actions.send.label") }}
                 <template v-slot:loading>
-                  <q-spinner />
+                  <q-spinner class="q-mr-sm" />
+                  <span>{{
+                    $t("SendTokenDialog.actions.send.in_progress")
+                  }}</span>
                 </template>
               </q-btn>
             </div>
@@ -254,14 +277,15 @@
 <script lang="ts">
 import { defineComponent } from "vue";
 import { useSendTokensStore } from "src/stores/sendTokensStore";
+import { PaymentRequest } from "@cashu/cashu-ts";
 import { useWalletStore } from "src/stores/wallet";
-import { useUiStore } from "src/stores/ui";
+import { type MutexPriority, useUiStore } from "src/stores/ui";
 import { useProofsStore } from "src/stores/proofs";
 import { useMintsStore } from "src/stores/mints";
 import { useTokensStore } from "src/stores/tokens";
 import { getShortUrl } from "src/js/wallet-helpers";
 import { useSettingsStore } from "src/stores/settings";
-import { useWorkersStore } from "src/stores/workers";
+import { useTransactionWorkerStore } from "src/stores/transactionWorker";
 import { usePriceStore } from "src/stores/price";
 import { useCameraStore } from "src/stores/camera";
 import { useP2PKStore } from "src/stores/p2pk";
@@ -296,6 +320,7 @@ export default defineComponent({
   data: function () {
     return {
       fiatKeyboardMode: false as boolean,
+      sendingEcash: false as boolean,
     };
   },
   computed: {
@@ -334,12 +359,11 @@ export default defineComponent({
       "currentCurrencyPrice",
     ]),
     ...mapState(useSettingsStore, ["bitcoinPriceCurrency"]),
-    ...mapState(useWorkersStore, ["tokenWorkerRunning"]),
     insufficientFunds: function (): boolean {
       if (this.sendData.amount == null) return false;
       // Use unlocked sats instead of total balance
       const educationStore = useEducationStore();
-      const availableBalance = educationStore.totalUnlockedSats;
+      const availableBalance = educationStore.spendableBalance(this.activeUnit);
       return (
         availableBalance <
         this.sendData.amount * this.activeUnitCurrencyMultiplyer
@@ -355,7 +379,11 @@ export default defineComponent({
     //       this.activeProofs,
     //       this.sendData.amount * this.activeUnitCurrencyMultiplyer
     //     );
-    //     const mintWallet = useWalletStore().wallet;
+    //     const mints = useMintsStore() as any;
+    //     const mintWallet = this.mintWalletSync(
+    //       mints.activeMintUrl,
+    //       mints.activeUnit
+    //     );
     //     let selectedProofs = this.coinSelect(
     //       spendableProofs,
     //       mintWallet,
@@ -383,6 +411,38 @@ export default defineComponent({
           this.isValidPubkey(this.sendData.p2pkPubkey)
       );
     },
+    // NUT-18's `m` field is mandatory today (cashu-ts `PaymentRequest.mints`
+    // is a plain `string[]`). This constraint helper wraps that so when the
+    // spec change at https://github.com/cashubtc/nuts/pull/381 lands we can
+    // also return `{ kind: "preferred", allowed }` without touching callers:
+    // the button disable + warning logic just keys off `kind`.
+    paymentRequestMintConstraint(): {
+      kind: "mandatory";
+      allowed: string[];
+    } | null {
+      const allowed =
+        this.sendData.paymentRequest?.mints?.filter((m): m is string => !!m) ??
+        [];
+      if (allowed.length === 0) return null;
+      return { kind: "mandatory", allowed };
+    },
+    selectedMintViolatesRequest(): boolean {
+      const c = this.paymentRequestMintConstraint;
+      if (!c) return false;
+      if (!this.activeMintUrl) return true;
+      return !c.allowed.includes(this.activeMintUrl);
+    },
+    paymentRequestMintWarning(): string {
+      // Only block (and warn) for mandatory constraints. Preferred-mint
+      // copy can be added later as a separate i18n key without reshaping
+      // this method.
+      const c = this.paymentRequestMintConstraint;
+      if (!c || c.kind !== "mandatory") return "";
+      if (!this.selectedMintViolatesRequest) return "";
+      return this.$t(
+        "SendTokenDialog.errors.mint_not_allowed_by_request"
+      ) as string;
+    },
     paymentRequestButtonDisabled(): boolean {
       if (!this.sendData.paymentRequest) {
         return true;
@@ -397,10 +457,33 @@ export default defineComponent({
       if (this.globalMutexLock) {
         return true;
       }
+      const c = this.paymentRequestMintConstraint;
+      if (c && c.kind === "mandatory" && this.selectedMintViolatesRequest) {
+        return true;
+      }
       return false;
     },
   },
   watch: {
+    activeMintUrl: function (newUrl, oldUrl) {
+      // When the user switches mint inside the Pay-PaymentRequest sheet, any
+      // proofs we already prepared belong to the previous mint (and embed
+      // that mint URL in the serialized token). Drop them so the next pay
+      // attempt rebuilds from the newly-selected mint.
+      if (!this.showSendTokens) return;
+      if (!this.sendData.paymentRequest) return;
+      if (!newUrl || !oldUrl || newUrl === oldUrl) return;
+      useSendTokensStore().invalidatePreparedPaymentRequestToken();
+    },
+    activeUnit: function (newUnit, oldUnit) {
+      // When the user switches active unit (e.g. from sat to usd or vice-versa) inside
+      // the Pay-PaymentRequest sheet, any proofs we already prepared belong to the
+      // previous unit. Drop them so the next pay attempt rebuilds with the new unit.
+      if (!this.showSendTokens) return;
+      if (!this.sendData.paymentRequest) return;
+      if (!newUnit || !oldUnit || newUnit === oldUnit) return;
+      useSendTokensStore().invalidatePreparedPaymentRequestToken();
+    },
     showSendTokens: function (val) {
       if (val) {
         this.$nextTick(() => {
@@ -424,25 +507,24 @@ export default defineComponent({
             );
             return;
           }
-          const unspent = this.checkTokenSpendable(
-            this.sendData.historyToken,
-            false
+          this.addOutgoingTokenToChecker(
+            this.sendData.historyToken.token,
+            true
           );
-          if (!unspent) {
-            this.sendData.historyToken.status = "paid";
-          }
+          this.onTokenPaid(this.sendData.historyToken).catch((error: any) => {
+            console.error("Could not start token status checker", error);
+          });
         }
       } else {
         clearInterval(this.qrInterval);
-        this.sendData.data = "";
         this.sendData.tokensBase64 = "";
-        this.sendData.historyToken = null;
-        this.sendData.paymentRequest = null;
+        this.sendData.historyToken = undefined;
+        this.sendData.paymentRequest = undefined;
       }
     },
   },
   methods: {
-    ...mapActions(useWorkersStore, ["clearAllWorkers"]),
+    ...mapActions(useTransactionWorkerStore, ["addOutgoingTokenToChecker"]),
     ...mapActions(useWalletStore, [
       "send",
       "sendToLock",
@@ -487,14 +569,33 @@ export default defineComponent({
       const sendAmount = Math.floor(
         this.sendData.amount * this.activeUnitCurrencyMultiplyer
       );
-      const mintWallet = this.mintWallet(this.activeMintUrl, this.activeUnit);
-      const { sendProofs } = await this.send(
-        this.activeProofs,
-        mintWallet,
-        sendAmount,
-        true,
-        this.includeFeesInSendAmount
+      const mintWallet = await this.mintWallet(
+        this.activeMintUrl,
+        this.activeUnit,
+        true
       );
+      // NUT-18 payment requests may require the proofs to be locked with a
+      // NUT-10 spending condition. PaymentRequest.toP2PKOptions() builds the
+      // P2PK/HTLC lock cashu-ts can honour, or returns undefined for any other
+      // kind, in which case we fall back to a normal unlocked send.
+      // History contains plain request data, so build the SDK lock converter here.
+      const lockRequest = new PaymentRequest();
+      lockRequest.nut10 = this.sendData.paymentRequest.nut10;
+      const lockOptions = lockRequest.toP2PKOptions();
+      const { sendProofs } = lockOptions
+        ? await this.sendToLock(
+            this.activeProofs,
+            mintWallet,
+            sendAmount,
+            lockOptions
+          )
+        : await this.send(
+            this.activeProofs,
+            mintWallet,
+            sendAmount,
+            true,
+            this.includeFeesInSendAmount
+          );
       const serialized = this.serializeProofs(sendProofs);
       if (!serialized) {
         throw new Error(
@@ -512,31 +613,34 @@ export default defineComponent({
         paymentRequest: this.sendData.paymentRequest,
         status: "pending",
       };
-      if (!this.sendData.historyToken) {
-        const _id = this.addPendingToken(historyToken);
-        (historyToken as any).id = _id;
-        if (!this.g.offline) {
-          this.onTokenPaid(historyToken);
-        }
+      const _id = this.addPendingToken(historyToken);
+      (historyToken as any).id = _id;
+      if (!this.g.offline) {
+        this.onTokenPaid(historyToken);
       }
       this.sendData.historyToken = historyToken as any;
       return serialized;
     },
-    lockTokens: async function () {
+    lockTokens: async function (mutexPriority: MutexPriority = "normal") {
       if (!this.sendData.amount) {
         throw new Error("Amount is required");
       }
-      let sendAmount = Math.floor(
+      const sendAmount = Math.floor(
         this.sendData.amount * this.activeUnitCurrencyMultiplyer
       );
       try {
         // keep firstProofs, send scndProofs and delete them (invalidate=true)
-        const mintWallet = this.mintWallet(this.activeMintUrl, this.activeUnit);
-        let { _, sendProofs } = await this.sendToLock(
+        const mintWallet = await this.mintWallet(
+          this.activeMintUrl,
+          this.activeUnit,
+          true
+        );
+        const { sendProofs } = await this.sendToLock(
           this.activeProofs,
           mintWallet,
           sendAmount,
-          this.sendData.p2pkPubkey
+          this.sendData.p2pkPubkey,
+          mutexPriority
         );
         // update UI
         this.sendData.tokens = sendProofs;
@@ -563,29 +667,40 @@ export default defineComponent({
       /*
       calls send, displays token and kicks off the spendableWorker
       */
-      this.sendData.p2pkPubkey = this.maybeConvertNpub(
-        this.sendData.p2pkPubkey
-      );
-      if (
-        this.sendData.p2pkPubkey &&
-        this.isValidPubkey(this.sendData.p2pkPubkey)
-      ) {
-        await this.lockTokens();
-        return;
-      }
+      if (this.sendingEcash) return;
+
+      const uiStore = useUiStore();
+      this.sendingEcash = true;
+      uiStore.beginForegroundPayment();
 
       try {
-        let sendAmount = Math.floor(
+        this.sendData.p2pkPubkey = this.maybeConvertNpub(
+          this.sendData.p2pkPubkey
+        );
+        if (
+          this.sendData.p2pkPubkey &&
+          this.isValidPubkey(this.sendData.p2pkPubkey)
+        ) {
+          await this.lockTokens("foreground");
+          return;
+        }
+
+        const sendAmount = Math.floor(
           this.sendData.amount * this.activeUnitCurrencyMultiplyer
         );
-        const mintWallet = this.mintWallet(this.activeMintUrl, this.activeUnit);
+        const mintWallet = await this.mintWallet(
+          this.activeMintUrl,
+          this.activeUnit,
+          false
+        );
         // keep firstProofs, send scndProofs and delete them (invalidate=true)
-        let { _, sendProofs } = await this.send(
+        const { sendProofs } = await this.send(
           this.activeProofs,
           mintWallet,
           sendAmount,
           true,
-          this.includeFeesInSendAmount
+          this.includeFeesInSendAmount,
+          "foreground"
         );
 
         // update UI
@@ -611,6 +726,9 @@ export default defineComponent({
         }
       } catch (error: any) {
         console.error(error);
+      } finally {
+        this.sendingEcash = false;
+        uiStore.endForegroundPayment();
       }
     },
     pasteToP2PKField: async function () {

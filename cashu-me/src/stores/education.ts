@@ -49,48 +49,66 @@ export type LockedSat = {
   parentNote?: string; // Optional note from parent
 };
 
-// Helper to get current user's pubkey (hex format)
-function getCurrentUserPubkey(): string | null {
-  const nostrStore = useNostrStore();
-  return nostrStore.pubkey || null;
+const EDUCATION_KEYS = [
+  "cashu.education.lessonProgress",
+  "cashu.education.lockedSats",
+  "cashu.education.parentPassword",
+  "cashu.education.totalRewardPool",
+];
+const STORAGE_MIGRATED_KEY = "cashu.education.storageMigrated";
+
+function hasData(value: string | null): value is string {
+  return !!value && !["null", "[]", "{}", "0"].includes(value);
 }
 
-// Helper to get storage key for user-specific data
-function getUserStorageKey(baseKey: string): string {
-  const pubkey = getCurrentUserPubkey();
-  if (pubkey) {
-    // Use npub format for storage key (more readable)
+// Education data used to be stored under a key suffixed with the Nostr pubkey.
+// The pubkey only appears once the wallet page has run, so the same user could
+// end up with data under both keys. Keep the copy the app was last using in the
+// plain key. The suffixed keys are left in place.
+export function migrateEducationStorage() {
+  if (localStorage.getItem(STORAGE_MIGRATED_KEY)) return;
+
+  const pubkey = useNostrStore().pubkey;
+  const currentKey = (baseKey: string) => {
     try {
-      const npub = nip19.npubEncode(pubkey);
-      return `${baseKey}.${npub}`;
+      return pubkey ? `${baseKey}.${nip19.npubEncode(pubkey)}` : null;
     } catch {
-      // Fallback to hex if encoding fails
-      return `${baseKey}.${pubkey}`;
+      return null;
     }
-  }
-  // Fallback to default key if no pubkey (for backward compatibility)
-  return baseKey;
+  };
+
+  EDUCATION_KEYS.forEach((baseKey) => {
+    const current = currentKey(baseKey);
+    const others = Object.keys(localStorage).filter(
+      (key) => key.startsWith(`${baseKey}.`) && key !== current
+    );
+    const source = [current, baseKey, ...others].find(
+      (key) => key && hasData(localStorage.getItem(key))
+    );
+    if (source && source !== baseKey) {
+      localStorage.setItem(baseKey, localStorage.getItem(source) as string);
+    }
+  });
+  localStorage.setItem(STORAGE_MIGRATED_KEY, "true");
 }
 
 export const useEducationStore = defineStore("education", {
   state: () => {
-    // Store lesson progress keyed by user pubkey
-    const progressKey = getUserStorageKey("cashu.education.lessonProgress");
-    const lockedSatsKey = getUserStorageKey("cashu.education.lockedSats");
-    const passwordKey = getUserStorageKey("cashu.education.parentPassword");
-    const rewardPoolKey = getUserStorageKey("cashu.education.totalRewardPool");
-    
+    migrateEducationStorage();
+
     return {
       // Static lesson content (loaded from bitcoin-lessons.ts)
       lessonContent: [] as LessonContent[],
       // User-specific progress: lessonId -> LessonProgress
-      lessonProgress: useLocalStorage<Record<string, LessonProgress>>(progressKey, {}),
-      lockedSats: useLocalStorage<LockedSat[]>(lockedSatsKey, []),
+      lessonProgress: useLocalStorage<Record<string, LessonProgress>>("cashu.education.lessonProgress", {}),
+      lockedSats: useLocalStorage<LockedSat[]>("cashu.education.lockedSats", []),
       currentLesson: null as Lesson | null,
       currentQuestionIndex: 0,
       answers: [] as (string | number | boolean)[],
-      parentPasswordHash: useLocalStorage<string | null>(passwordKey, null),
-      totalRewardPool: useLocalStorage<number>(rewardPoolKey, 0), // Total sats to be distributed across all lessons
+      parentPasswordHash: useLocalStorage<string | null>("cashu.education.parentPassword", null),
+      totalRewardPool: useLocalStorage<number>("cashu.education.totalRewardPool", 0), // Total sats to be distributed across all lessons
+      spentSats: useLocalStorage<number>("cashu.education.spentSats", 0), // Unlocked sats that have left the wallet
+      spendHolds: useLocalStorage<Record<string, number>>("cashu.education.spendHolds", {}), // Payments in flight: id -> sats
     };
   },
   getters: {
@@ -145,11 +163,25 @@ export const useEducationStore = defineStore("education", {
       return Math.max(0, total - unlocked);
     },
     
-    // Get unlocked sats (earned by completing lessons, can be spent)
-    totalUnlockedSats: (state): number => {
-      return state.lockedSats
+    // Get unlocked sats (earned by completing lessons, minus what was spent).
+    // Spending from before the ledger existed is unknown, so cap at the balance.
+    totalUnlockedSats(state): number {
+      const earned = state.lockedSats
         .filter((s) => s.unlockedAt)
         .reduce((sum, s) => sum + s.amount, 0);
+      const held = Object.values(state.spendHolds).reduce(
+        (sum, amount) => sum + amount,
+        0
+      );
+      return Math.max(
+        0,
+        Math.min(earned - state.spentSats - held, this.totalWalletBalance)
+      );
+    },
+
+    // Lessons only unlock sats, so nothing else can be spent
+    spendableBalance(): (unit: string) => number {
+      return (unit) => (unit === "sat" ? this.totalUnlockedSats : 0);
     },
     
     // Get available balance for locking (total - locked - unlocked = free sats)
@@ -162,9 +194,7 @@ export const useEducationStore = defineStore("education", {
       const locked = state.lockedSats
         .filter((s) => !s.unlockedAt)
         .reduce((sum, s) => sum + s.amount, 0);
-      const unlocked = state.lockedSats
-        .filter((s) => s.unlockedAt)
-        .reduce((sum, s) => sum + s.amount, 0);
+      const unlocked = this.totalUnlockedSats;
       // Available = total - (locked + unlocked)
       // This represents sats that are free to lock
       return Math.max(0, total - locked - unlocked);
@@ -301,10 +331,12 @@ export const useEducationStore = defineStore("education", {
       }
     },
     
-    lockSats(amount: number, note?: string): string {
+    // checkBalance is off for sats that just arrived: they can come from any
+    // mint, and the proofs store may not have refreshed yet.
+    lockSats(amount: number, note?: string, checkBalance = true): string {
       // Check if we have enough available balance to lock
       const available = this.availableBalance;
-      if (amount > available) {
+      if (checkBalance && amount > available) {
         throw new Error(`Not enough available balance. Available: ${available} sats, trying to lock: ${amount} sats`);
       }
       
@@ -319,6 +351,36 @@ export const useEducationStore = defineStore("education", {
       return lockedSat.id;
     },
     
+    // Reserve unlocked sats for a payment, before any money moves
+    holdSpend(id: string, amount: number, unit: string) {
+      if (id in this.spendHolds) {
+        throw new Error("This payment is already in progress");
+      }
+      const spendable = this.spendableBalance(unit);
+      if (amount > spendable) {
+        throw new Error(`Not enough unlocked sats. Unlocked: ${spendable} sats, needed: ${amount} sats`);
+      }
+      this.spendHolds[id] = amount;
+    },
+
+    // The payment went through: record what it really cost. Does nothing for a
+    // payment without a hold, so finalizing the same payment twice is safe.
+    settleSpend(id: string, amount: number) {
+      if (!(id in this.spendHolds)) return;
+      delete this.spendHolds[id];
+      this.spentSats += amount;
+    },
+
+    // The payment failed, so the sats never left the wallet
+    releaseSpend(id: string) {
+      delete this.spendHolds[id];
+    },
+
+    // Own outgoing token was claimed back
+    refundSpend(amount: number) {
+      this.spentSats = Math.max(0, this.spentSats - amount);
+    },
+
     // Unlock sats based on lesson completion
     unlockSatsFromLesson(lessonId: string, score: number): number {
       // Only unlock sats if score is 100%

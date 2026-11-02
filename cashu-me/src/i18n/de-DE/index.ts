@@ -80,6 +80,7 @@ export default {
       no_lnurl_data: "Keine LNURL-Daten",
       no_price_data: "Keine Preisdaten.",
       please_try_again: "Bitte versuchen Sie es erneut.",
+      trying_again: "Wird erneut versucht...",
     },
     mint: {
       notifications: {
@@ -165,6 +166,61 @@ export default {
     },
   },
   Settings: {
+    menu: {
+      title: "Einstellungen",
+      backup: {
+        title: "Backup & Wiederherstellung",
+        caption: "Seed-Phrase und Ecash-Wiederherstellung",
+      },
+      lightning_address: {
+        title: "Lightning-Adresse",
+        caption: "Zahlungen an deine Lightning-Adresse empfangen",
+      },
+      nostr: {
+        title: "Nostr",
+        caption: "Schlüssel, Relays und Web of Trust",
+      },
+      payment_requests: {
+        title: "Zahlungsanfragen",
+        caption: "Ecash-Zahlungen über Nostr empfangen",
+      },
+      nwc: {
+        title: "Nostr Wallet Connect",
+        caption: "Wallet aus anderen Apps verwenden",
+      },
+      hardware: {
+        title: "Hardware",
+        caption: "NFC-Einstellungen",
+      },
+      p2pk: {
+        title: "P2PK",
+        caption: "Ecash empfangen, das an deine Schlüssel gebunden ist",
+      },
+      privacy: {
+        title: "Privatsphäre",
+        caption: "Netzwerkprüfungen und Bitcoin-Preis",
+      },
+      experimental: {
+        title: "Experimentell",
+        caption: "Neue Funktionen früher ausprobieren",
+      },
+      appearance: {
+        title: "Aussehen",
+        caption: "Design, Tastatur und Bitcoin-Symbol",
+      },
+      language: {
+        title: "Sprache",
+        caption: "Wähle deine Sprache",
+      },
+      advanced: {
+        title: "Erweitert",
+        caption: "Entwicklerwerkzeuge und Wallet-Reset",
+      },
+      about: {
+        title: "Über",
+        caption: "Nutzungsbedingungen und Links",
+      },
+    },
     language: {
       title: "Sprache",
       description:
@@ -223,13 +279,18 @@ export default {
       address: {
         copy_tooltip: "Lightning Adresse kopieren",
       },
+      show_on_receive: {
+        toggle: "Beim Empfangen anzeigen",
+        description: "Adresse und QR-Code anzeigen.",
+      },
       automatic_claim: {
         toggle: "Automatisch beanspruchen",
         description: "Eingehende Zahlungen automatisch empfangen.",
       },
-      npc_v2: {
-        choose_mint_title: "Wählen Sie eine Mint für npub.cash v2",
-        choose_mint_placeholder: "Wählen Sie eine Mint...",
+      mint: {
+        label: "npub.cash Mint",
+        choose_title: "Wählen Sie eine Mint für npub.cash",
+        choose_placeholder: "Wählen Sie eine Mint...",
       },
     },
     web_of_trust: {
@@ -243,9 +304,7 @@ export default {
       progress: "{crawlProcessed} / {crawlTotal}",
     },
     npub_cash: {
-      use_npubx: "npubx.cash verwenden",
       copy_lightning_address: "Lightning-Adresse kopieren",
-      v2_mint: "npub.cash v2 Mint",
     },
     multinut: {
       use_multinut: "Multinut verwenden",
@@ -349,7 +408,7 @@ export default {
       check_startup: {
         toggle: "Ausstehende Rechnungen beim Start prüfen",
         description:
-          "Wenn aktiviert, prüft die Wallet beim Start ausstehende Rechnungen der letzten 24 Stunden.",
+          "Wenn aktiviert, prüft die Wallet beim Start ausstehende Rechnungen.",
       },
       check_all: {
         toggle: "Alle Rechnungen prüfen",
@@ -1001,6 +1060,7 @@ export default {
       },
       send: {
         label: "@:global.actions.send.label",
+        in_progress: "Wird gesendet…",
       },
       delete: {
         tooltip_text: "Aus Verlauf löschen",
@@ -1377,6 +1437,7 @@ export default {
         pay: {
           label: "Bezahlen",
           in_progress: "@:PayInvoiceDialog.invoice.processing_info_text",
+          waiting_for_wallet: "Warte auf Wallet…",
           error: "Fehler",
         },
       },
@@ -1404,7 +1465,7 @@ export default {
   AddMintDialog: {
     title: "Vertrauen Sie dieser Mint?",
     description:
-      "Bevor Sie diese Mint verwenden, stellen Sie sicher, dass Sie ihr vertrauen. Mints könnten bösartig werden oder jederzeit den Betrieb einstellen.",
+      "Treten Sie dieser Mint nur bei, wenn Sie ihr vertrauen. Mints können jederzeit den Betrieb einstellen.",
     inputs: {
       mint_url: {
         label: "@:global.inputs.mint_url.label",
@@ -1417,6 +1478,17 @@ export default {
       add_mint: {
         label: "@:global.actions.add_mint.label",
         in_progress: "Mint wird hinzugefügt",
+      },
+    },
+    audit_info: {
+      label: "Audit-Infos",
+      actions: {
+        show: {
+          label: "Anzeigen",
+        },
+        hide: {
+          label: "Ausblenden",
+        },
       },
     },
   },

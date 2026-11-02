@@ -62,6 +62,13 @@
         <div class="text-h4">Admin Dashboard</div>
         <q-btn
           flat
+          icon="settings"
+          label="Wallet settings"
+          to="/settings"
+          color="primary"
+        />
+        <q-btn
+          flat
           icon="lock"
           label="Lock"
           @click="lockDashboard"
@@ -189,6 +196,8 @@
 
 <script lang="ts">
 import { defineComponent, ref, computed, onMounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { adminUnlocked } from "src/js/adminSession";
 import { useEducationStore } from "src/stores/education";
 import { useMintsStore } from "src/stores/mints";
 import { date } from "quasar";
@@ -198,7 +207,16 @@ export default defineComponent({
   setup() {
     const educationStore = useEducationStore();
     const mintsStore = useMintsStore();
-    const isAuthenticated = ref(false);
+    const route = useRoute();
+    const router = useRouter();
+    const isAuthenticated = ref(adminUnlocked.value);
+    const unlockAdmin = () => {
+      adminUnlocked.value = true;
+      isAuthenticated.value = true;
+      if (typeof route.query.redirect === "string") {
+        router.push(route.query.redirect);
+      }
+    };
     const password = ref("");
     const newPassword = ref("");
     const confirmPassword = ref("");
@@ -329,7 +347,7 @@ export default defineComponent({
       await educationStore.setParentPassword(newPassword.value);
       newPassword.value = "";
       confirmPassword.value = "";
-      isAuthenticated.value = true;
+      unlockAdmin();
     };
 
     const authenticate = async () => {
@@ -339,9 +357,9 @@ export default defineComponent({
       try {
         const valid = await educationStore.verifyPassword(password.value);
         if (valid) {
-          isAuthenticated.value = true;
           password.value = "";
           totalRewardPool.value = educationStore.totalRewardPool;
+          unlockAdmin();
         } else {
           passwordError.value = true;
         }
@@ -354,6 +372,7 @@ export default defineComponent({
     };
 
     const lockDashboard = () => {
+      adminUnlocked.value = false;
       isAuthenticated.value = false;
       password.value = "";
     };

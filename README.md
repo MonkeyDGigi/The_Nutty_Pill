@@ -31,7 +31,7 @@ This project is a fork/derivative of cashu.me. The original project uses the MIT
 
 ### Prerequisites
 
-- Node.js (v16 or higher)
+- Node.js (v22.4 or higher)
 - npm or yarn
 
 ### Installation
@@ -63,6 +63,7 @@ The app will be available at `http://localhost:8080`
 3. **Secure the Seed Phrase**: **Important** - Save the wallet's seed phrase securely. This allows you to access the wallet on cashu.me if needed to unlock sats or recover funds if something goes wrong
 4. **Add Sats**: Receive sats to the wallet from a Cashu mint
 5. **Set Reward Pool**: Go to Settings to set the total reward pool. All sats are locked by default and can only be unlocked by completing lessons
+   - Locked sats can't be sent from The Nutty Pill by any route (ecash, Lightning, on-chain or NWC). To move them yourself, open the wallet on cashu.me with the seed phrase
 6. **Let Them Learn**: Progress is saved locally on their device. Learners complete lessons and unlock sats as they progress!
 
 ### For Learners

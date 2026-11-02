@@ -79,6 +79,7 @@ export default {
       no_lnurl_data: "Pas de données LNURL",
       no_price_data: "Pas de données de prix.",
       please_try_again: "Veuillez réessayer.",
+      trying_again: "Nouvel essai en cours...",
     },
     mint: {
       notifications: {
@@ -164,6 +165,61 @@ export default {
     },
   },
   Settings: {
+    menu: {
+      title: "Paramètres",
+      backup: {
+        title: "Sauvegarde et restauration",
+        caption: "Phrase de récupération et restauration d'ecash",
+      },
+      lightning_address: {
+        title: "Adresse Lightning",
+        caption: "Recevez des paiements sur votre adresse Lightning",
+      },
+      nostr: {
+        title: "Nostr",
+        caption: "Clés, relais et Web of Trust",
+      },
+      payment_requests: {
+        title: "Demandes de paiement",
+        caption: "Recevez des paiements ecash via nostr",
+      },
+      nwc: {
+        title: "Nostr Wallet Connect",
+        caption: "Utilisez votre portefeuille depuis d'autres applications",
+      },
+      hardware: {
+        title: "Matériel",
+        caption: "Paramètres NFC",
+      },
+      p2pk: {
+        title: "P2PK",
+        caption: "Recevez de l'ecash verrouillé sur vos clés",
+      },
+      privacy: {
+        title: "Confidentialité",
+        caption: "Vérifications réseau et prix du Bitcoin",
+      },
+      experimental: {
+        title: "Expérimental",
+        caption: "Essayez les nouvelles fonctionnalités en avant-première",
+      },
+      appearance: {
+        title: "Apparence",
+        caption: "Thème, clavier et symbole Bitcoin",
+      },
+      language: {
+        title: "Langue",
+        caption: "Choisissez votre langue",
+      },
+      advanced: {
+        title: "Avancé",
+        caption: "Outils développeur et réinitialisation du portefeuille",
+      },
+      about: {
+        title: "À propos",
+        caption: "Conditions et liens",
+      },
+    },
     sections: {
       backup_restore: "SAUVEGARDE & RESTAURATION",
       lightning_address: "ADRESSE LIGHTNING",
@@ -222,13 +278,18 @@ export default {
       address: {
         copy_tooltip: "Copier l'adresse Lightning",
       },
+      show_on_receive: {
+        toggle: "Afficher à la réception",
+        description: "Afficher l'adresse et le code QR.",
+      },
       automatic_claim: {
         toggle: "Réclamer automatiquement",
         description: "Recevez les paiements entrants automatiquement.",
       },
-      npc_v2: {
-        choose_mint_title: "Choisissez une menthe pour npub.cash v2",
-        choose_mint_placeholder: "Sélectionnez une menthe...",
+      mint: {
+        label: "npub.cash mint",
+        choose_title: "Choisissez une mint pour npub.cash",
+        choose_placeholder: "Sélectionnez une mint...",
       },
     },
     nostr_keys: {
@@ -329,7 +390,7 @@ export default {
       check_startup: {
         toggle: "Vérifier les factures en attente au démarrage",
         description:
-          "Si activé, le portefeuille vérifiera les factures en attente des dernières 24 heures au démarrage.",
+          "Si activé, le portefeuille vérifiera les factures en attente au démarrage.",
       },
       check_all: {
         toggle: "Vérifier toutes les factures",
@@ -438,9 +499,7 @@ export default {
       progress: "{crawlProcessed} / {crawlTotal}",
     },
     npub_cash: {
-      use_npubx: "Utiliser npubx.cash",
       copy_lightning_address: "Copier l'adresse Lightning",
-      v2_mint: "npub.cash v2 mint",
     },
     advanced: {
       title: "Avancé",
@@ -1001,6 +1060,7 @@ export default {
       },
       send: {
         label: "@:global.actions.send.label",
+        in_progress: "Envoi…",
       },
       delete: {
         tooltip_text: "Supprimer de l'historique",
@@ -1377,6 +1437,7 @@ export default {
         pay: {
           label: "Payer",
           in_progress: "@:PayInvoiceDialog.invoice.processing_info_text",
+          waiting_for_wallet: "En attente du portefeuille…",
           error: "Erreur",
         },
       },
@@ -1404,7 +1465,7 @@ export default {
   AddMintDialog: {
     title: "Faites-vous confiance à cette mint ?",
     description:
-      "Avant d'utiliser cette mint, assurez-vous de lui faire confiance. Les mints pourraient devenir malveillantes ou cesser leurs opérations à tout moment.",
+      "Ne rejoignez cette mint que si vous lui faites confiance. Les mints peuvent cesser leurs opérations à tout moment.",
     inputs: {
       mint_url: {
         label: "@:global.inputs.mint_url.label",
@@ -1417,6 +1478,17 @@ export default {
       add_mint: {
         label: "@:global.actions.add_mint.label",
         in_progress: "Ajout de la mint",
+      },
+    },
+    audit_info: {
+      label: "Infos d'audit",
+      actions: {
+        show: {
+          label: "Afficher",
+        },
+        hide: {
+          label: "Masquer",
+        },
       },
     },
   },

@@ -1,112 +1,138 @@
 <template>
-  <q-dialog
+  <BottomSheet
     v-model="showAddMintDialogLocal"
-    @keydown.enter.prevent="addMintLocal"
-    backdrop-filter="blur(4px) brightness(50%)"
-    transition-show="fade"
-    transition-hide="fade"
-    scrollable
+    :title="$t('AddMintDialog.title')"
+    @enter="addMintLocal"
   >
-    <q-card class="add-mint-dialog">
-      <!-- Header Section -->
-      <q-card-section class="add-mint-header q-pa-md">
-        <div class="add-mint-title-row">
-          <h4 class="add-mint-title q-my-none">
-            {{ $t("AddMintDialog.title") }}
-          </h4>
-        </div>
-      </q-card-section>
-
-      <!-- Scrollable Content Section -->
-      <q-card-section
-        class="add-mint-content q-px-md scroll"
-        style="max-height: 60vh"
-      >
-        <p class="add-mint-description q-mb-lg">
-          {{ $t("AddMintDialog.description") }}
+    <div class="q-px-lg">
+      <!--
+        Status messages are stacked in the same grid cell, so the stack is
+        always as tall as the tallest message and the sheet never resizes
+        when the state swaps (description / already added / error).
+      -->
+      <div class="message-stack q-mb-lg">
+        <p
+          class="message sheet-added"
+          :class="{ active: messageState === 'added' }"
+          :aria-hidden="messageState !== 'added'"
+        >
+          <q-icon
+            name="check_circle"
+            color="positive"
+            size="18px"
+            class="q-mr-xs message-icon"
+          />
+          {{ $t("wallet.mint.notifications.already_added") }}
         </p>
+        <p
+          class="message sheet-error"
+          :class="{ active: messageState === 'error' }"
+          :aria-hidden="messageState !== 'error'"
+        >
+          <q-icon
+            name="error_outline"
+            color="negative"
+            size="18px"
+            class="q-mr-xs message-icon"
+          />
+          {{ $t("AddMintDialog.unreachable_error_text") }}
+        </p>
+        <p
+          class="message"
+          :class="{ active: messageState === 'description' }"
+          :aria-hidden="messageState !== 'description'"
+        >
+          <span class="message-muted">{{
+            $t("AddMintDialog.description")
+          }}</span>
+        </p>
+      </div>
 
-        <div class="q-mb-lg">
-          <label class="input-label">{{
-            $t("AddMintDialog.inputs.mint_url.label")
-          }}</label>
-          <q-input
-            outlined
-            readonly
-            :model-value="mintUrl"
-            dense
-            class="mint-input"
-            filled
-            type="textarea"
-            autogrow
-            style="font-family: monospace; font-size: 0.9em"
-          ></q-input>
-        </div>
+      <!-- Mint preview pill -->
+      <div class="mint-preview-pill q-mb-lg">
+        <MintInfoContainer
+          :url="mintUrl"
+          :name="mintDisplayName"
+          :iconUrl="mintIconUrl"
+          :loading="mintInfoLoading"
+          avatarSize="48px"
+        />
+      </div>
 
-        <!-- Audit Info Section -->
-        <div v-if="mintUrl" class="q-mb-lg">
-          <div class="audit-info-section">
-            <q-btn
-              flat
-              class="audit-info-btn"
-              @click="showAuditInfo = !showAuditInfo"
-            >
-              <info-icon size="16" class="q-mr-xs" />
-              {{
-                showAuditInfo ? "Hide Mint Audit Info" : "View Mint Audit Info"
-              }}
-            </q-btn>
-
-            <!-- Audit Info Component -->
-            <transition
-              enter-active-class="animated fadeIn"
-              leave-active-class="animated fadeOut"
-            >
-              <MintAuditInfo
-                v-if="showAuditInfo"
-                :mintUrl="mintUrl"
-                class="q-mt-md"
-              />
-            </transition>
+      <!-- Audit Info Section -->
+      <div v-if="mintUrl" class="q-mb-lg">
+        <div class="detail-item">
+          <div class="detail-label">
+            <info-icon size="20" color="#9E9E9E" class="detail-icon" />
+            <div class="detail-name">
+              {{ $t("AddMintDialog.audit_info.label") }}
+            </div>
+          </div>
+          <div
+            class="detail-value audit-toggle"
+            @click="showAuditInfo = !showAuditInfo"
+          >
+            {{
+              showAuditInfo
+                ? $t("AddMintDialog.audit_info.actions.hide.label")
+                : $t("AddMintDialog.audit_info.actions.show.label")
+            }}
           </div>
         </div>
-      </q-card-section>
 
-      <!-- Fixed Action Buttons Section -->
-      <q-card-actions class="action-buttons flex q-pa-md">
-        <q-btn flat class="cancel-btn" v-close-popup>
-          {{ $t("AddMintDialog.actions.cancel.label") }}
-        </q-btn>
-        <q-spacer></q-spacer>
-        <q-btn
-          color="primary"
-          class="add-btn"
-          @click="addMintLocal"
-          v-close-popup
-          :loading="addMintBlocking"
-          icon="check"
+        <!-- Audit Info Component -->
+        <transition
+          enter-active-class="animated fadeIn"
+          leave-active-class="animated fadeOut"
         >
-          {{ $t("AddMintDialog.actions.add_mint.label") }}
-          <template v-slot:loading>
-            <q-spinner />
-            {{ $t("AddMintDialog.actions.add_mint.in_progress") }}
-          </template>
-        </q-btn>
-      </q-card-actions>
-    </q-card>
-  </q-dialog>
+          <MintAuditInfo
+            v-if="showAuditInfo"
+            :mintUrl="mintUrl"
+            class="q-mt-md"
+          />
+        </transition>
+      </div>
+    </div>
+
+    <template #actions>
+      <q-btn
+        class="full-width"
+        unelevated
+        size="lg"
+        color="primary"
+        rounded
+        data-testid="confirm-add-mint"
+        @click="addMintLocal"
+        v-close-popup
+        :loading="addMintBlocking"
+        :disable="addMintDisabled"
+      >
+        {{ $t("AddMintDialog.actions.add_mint.label") }}
+        <template v-slot:loading>
+          <q-spinner class="q-mr-sm" />
+          <span>{{ $t("AddMintDialog.actions.add_mint.in_progress") }}</span>
+        </template>
+      </q-btn>
+    </template>
+  </BottomSheet>
 </template>
 
 <script lang="ts">
-import { defineComponent, computed, ref } from "vue";
-import { useSettingsStore } from "src/stores/settings";
+import { defineComponent, computed, ref, watch } from "vue";
+import { useMintsStore } from "src/stores/mints";
+import { useMintRecommendationsStore } from "src/stores/mintRecommendations";
+import { getShortUrl } from "src/js/wallet-helpers";
+import BottomSheet from "./BottomSheet.vue";
 import MintAuditInfo from "./MintAuditInfo.vue";
+import MintInfoContainer from "./MintInfoContainer.vue";
 import { Info as InfoIcon } from "lucide-vue-next";
 
 export default defineComponent({
   name: "AddMintDialog",
   components: {
+    BottomSheet,
     MintAuditInfo,
+    MintInfoContainer,
     InfoIcon,
   },
   props: {
@@ -125,8 +151,12 @@ export default defineComponent({
   },
   emits: ["add", "update:showAddMintDialog"],
   setup(props, { emit }) {
-    const settings = useSettingsStore();
+    const mintsStore = useMintsStore();
+    const mintRecommendations = useMintRecommendationsStore();
     const showAuditInfo = ref(false);
+    // "idle" | "loading" | "ok" | "error"
+    const mintFetchState = ref("idle");
+    const MINT_INFO_TIMEOUT_MS = 8000;
 
     const showAddMintDialogLocal = computed({
       get: () => props.showAddMintDialog,
@@ -134,16 +164,117 @@ export default defineComponent({
     });
 
     const addMintLocal = () => {
+      // Guard against Enter-key submits while the add button is disabled
+      if (addMintDisabled.value) return;
       emit("add", props.addMintData, true); // Pass verbose = true
     };
 
     const mintUrl = computed(() => props.addMintData.url);
 
+    // Mirrors the exact-match duplicate check in the mints store
+    const mintAlreadyAdded = computed(() =>
+      mintsStore.mints.some((m) => m.url === mintUrl.value)
+    );
+
+    const mintHttpInfo = computed(() => {
+      if (!mintUrl.value) return undefined;
+      return mintRecommendations.getHttpInfoForUrl(mintUrl.value);
+    });
+
+    const mintDisplayName = computed(() => {
+      return (
+        props.addMintData.nickname ||
+        mintHttpInfo.value?.name ||
+        (mintUrl.value ? getShortUrl(mintUrl.value) : "")
+      );
+    });
+
+    const mintIconUrl = computed(
+      () => mintHttpInfo.value?.icon_url || undefined
+    );
+
+    const mintInfoLoading = computed(() => mintFetchState.value === "loading");
+    const mintInfoError = computed(() => mintFetchState.value === "error");
+    // Which status message is shown in the stacked message area
+    const messageState = computed(() =>
+      mintAlreadyAdded.value
+        ? "added"
+        : mintInfoError.value
+        ? "error"
+        : "description"
+    );
+    const addMintDisabled = computed(
+      () =>
+        props.addMintBlocking ||
+        mintInfoLoading.value ||
+        mintInfoError.value ||
+        mintAlreadyAdded.value
+    );
+
+    // Fetch the mint's info (name, icon) when the sheet opens so the user
+    // sees a rich preview instead of a bare URL. If the mint cannot be
+    // reached, we show an error and disable the add button.
+    const fetchMintPreview = async (url: string) => {
+      if (!url) {
+        mintFetchState.value = "idle";
+        return;
+      }
+      if (mintRecommendations.hasHttpInfo(url)) {
+        mintFetchState.value = "ok";
+        return;
+      }
+      mintFetchState.value = "loading";
+      const timeout = new Promise((resolve) =>
+        setTimeout(() => resolve("timeout"), MINT_INFO_TIMEOUT_MS)
+      );
+      const fetch = mintRecommendations
+        .requestMintHttpInfo(url, MINT_INFO_TIMEOUT_MS)
+        .then(() => "done")
+        .catch(() => "done");
+      await Promise.race([fetch, timeout]);
+      // Bail out if the sheet was closed or the URL changed meanwhile;
+      // the watcher on mintHttpInfo still flips the state if the info
+      // arrives late.
+      if (mintUrl.value !== url || !showAddMintDialogLocal.value) return;
+      mintFetchState.value = mintRecommendations.hasHttpInfo(url)
+        ? "ok"
+        : "error";
+    };
+
+    // Fire on every open and URL change — and immediately on mount, because
+    // the sheet can be mounted *after* the open flag was set (deep link and
+    // QR scan flows set the store state before the sheet's host mounts).
+    watch(
+      [showAddMintDialogLocal, mintUrl],
+      ([isOpen, url]) => {
+        if (isOpen && url) {
+          showAuditInfo.value = false;
+          mintFetchState.value = "idle";
+          fetchMintPreview(url);
+        }
+      },
+      { immediate: true }
+    );
+
+    // If the mint info arrives late (e.g. the fetch outlived our local
+    // timeout), recover from the error/loading state automatically.
+    watch(mintHttpInfo, (info) => {
+      if (info && showAddMintDialogLocal.value) {
+        mintFetchState.value = "ok";
+      }
+    });
+
     return {
       addMintLocal,
       showAddMintDialogLocal,
       mintUrl,
-      settings,
+      mintDisplayName,
+      mintIconUrl,
+      mintInfoLoading,
+      mintInfoError,
+      mintAlreadyAdded,
+      messageState,
+      addMintDisabled,
       showAuditInfo,
     };
   },
@@ -151,171 +282,104 @@ export default defineComponent({
 </script>
 
 <style scoped>
-.add-mint-dialog {
-  width: 100%;
-  max-width: 450px;
-  max-height: 80vh;
-  border-radius: 16px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+/* All status messages occupy the same grid cell, so the stack's height is
+   always the height of the tallest message: the sheet never resizes when
+   the visible message changes. Inactive messages cross-fade out. */
+.message-stack {
+  display: grid;
 }
 
-.add-mint-header {
-  position: relative;
-  padding-top: 20px;
-  flex-shrink: 0;
-}
-
-.add-mint-title-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.add-mint-title {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  font-family: "Inter", sans-serif;
-}
-
-.add-mint-content {
-  padding-top: 0;
-  flex: 1;
-  overflow-y: auto;
-}
-
-.add-mint-description {
+.message {
+  grid-area: 1 / 1;
+  margin: 0;
   font-size: 15px;
   line-height: 1.5;
   font-weight: 400;
-  margin-top: 0;
+  font-family: "Inter", sans-serif;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0s linear 0.25s;
+}
+
+.message.active {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.25s ease;
+}
+
+/* Muted look via a child span so it multiplies with the fade opacity */
+.message-muted {
   opacity: 0.7;
-  font-family: "Inter", sans-serif;
 }
 
-.input-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  opacity: 0.7;
-  font-family: "Inter", sans-serif;
+.sheet-error {
+  color: var(--q-negative);
+  font-weight: 500;
 }
 
-.mint-data-display {
-  padding: 12px;
-  background-color: rgba(0, 0, 0, 0.03);
-  border-radius: 8px;
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-  font-family: "Inter", sans-serif;
+.sheet-added {
+  color: var(--q-positive);
+  font-weight: 500;
 }
 
-.body--dark .mint-data-display {
+.message-icon {
+  vertical-align: -3px;
+}
+
+/* Mint preview pill (styled like the mint selector pill, but static) */
+.mint-preview-pill {
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  background-color: rgba(128, 128, 128, 0.08);
+}
+
+.body--dark .mint-preview-pill {
+  border-color: rgba(255, 255, 255, 0.1);
   background-color: rgba(255, 255, 255, 0.05);
 }
 
-.mint-input {
-  border-radius: 8px;
-  height: 48px;
-  font-size: 16px;
-  font-family: "Inter", sans-serif;
+.body--light .mint-preview-pill {
+  border-color: rgba(0, 0, 0, 0.12);
+  background-color: rgba(0, 0, 0, 0.03);
 }
 
-/* Completely remove all input animations */
-:deep(.mint-input) {
-  /* Disable all transitions on the input and its children except for background-color */
-  * {
-    transition: none !important;
-    animation: none !important;
-  }
-
-  /* Add a smooth transition just for the background-color */
-  transition: background-color 0.2s ease-in-out !important;
+.mint-preview-pill :deep(.q-avatar) {
+  margin-right: 16px !important;
 }
 
-:deep(.mint-input .q-field__focus-target) {
-  border-radius: 8px;
-}
-
-:deep(.mint-input .q-focus-helper) {
-  /* Remove animation completely */
-  opacity: 0 !important;
-  display: none !important; /* Hide it completely */
-}
-
-/* Add subtle focus/active state - theme responsive */
-:deep(.mint-input.q-field--focused) {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-/* For dark mode, adjust the focus color */
-:deep(.body--dark .mint-input.q-field--focused) {
-  background-color: rgba(255, 255, 255, 0.07);
-}
-
-/* For light mode, use a darker shade for contrast */
-:deep(.body--light .mint-input.q-field--focused) {
-  background-color: rgba(0, 0, 0, 0.05);
-}
-
-/* Remove any ripple effects */
-:deep(.mint-input .q-ripple) {
-  display: none !important;
-}
-
-/* Remove any before/after pseudo-elements that might animate */
-:deep(.mint-input .q-field__control:before),
-:deep(.mint-input .q-field__control:after) {
-  display: none !important;
-}
-
-/* Ensure no border animations */
-:deep(.mint-input .q-field__control) {
-  height: 48px;
-  border-radius: 8px;
-  transition: none !important;
-}
-
-:deep(.mint-input .q-field__native) {
-  padding: 12px;
-  font-family: "Inter", sans-serif;
-}
-
-/* Make sure input placeholders use Inter font */
-:deep(.mint-input .q-field__native),
-:deep(.mint-input .q-field__input),
-:deep(.mint-input .q-placeholder) {
-  font-family: "Inter", sans-serif;
-}
-
-.action-buttons {
+/* Audit info row (styled like the detail rows on the mint details page) */
+.detail-item {
   display: flex;
   justify-content: space-between;
-  margin-top: 32px;
+  align-items: center;
+  width: 100%;
 }
 
-.cancel-btn {
+.detail-label {
+  display: flex;
+  align-items: center;
+}
+
+.detail-icon {
+  margin-right: 10px;
+}
+
+.detail-name {
+  font-size: 16px;
   font-weight: 600;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-family: "Inter", sans-serif;
+  color: #9e9e9e;
 }
 
-.add-btn {
-  font-weight: 700;
-  padding: 8px 20px;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-  font-family: "Inter", sans-serif;
+.detail-value {
+  font-size: 16px;
+  font-weight: 600;
+  text-align: right;
 }
 
-.add-btn:hover {
-  transform: translateY(-1px);
+.audit-toggle {
+  cursor: pointer;
+  user-select: none;
 }
 </style>

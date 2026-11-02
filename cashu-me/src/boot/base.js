@@ -3,6 +3,7 @@ import { useUiStore } from "stores/ui";
 import { Clipboard } from "@capacitor/clipboard";
 import { SafeArea } from "capacitor-plugin-safe-area";
 import { useSettingsStore } from "stores/settings";
+import { formatBigIntCurrency } from "src/js/format-currency";
 window.LOCALE = "en";
 // window.EventHub = new Vue();
 
@@ -116,8 +117,8 @@ window.windowMixin = {
       updateStatusBarMeta();
     },
     copyText: function (text, message, position) {
-      let notify = this.$q.notify;
-      let i18n = this.$i18n;
+      const notify = this.$q.notify;
+      const i18n = this.$i18n;
       copyToClipboard(text).then(function () {
         notify({
           message:
@@ -145,14 +146,30 @@ window.windowMixin = {
       if (useUiStore().hideBalance && !showBalance) {
         return "****";
       }
+      if (typeof value === "bigint") {
+        return formatBigIntCurrency(
+          value,
+          currency,
+          window.LOCALE,
+          useSettingsStore().bip177BitcoinSymbol
+        );
+      }
       if (currency == "sat") return this.formatSat(value);
       if (currency == "msat") return this.fromMsat(value);
       if (currency == "usd") value = value / 100;
       if (currency == "eur") value = value / 100;
-      return new Intl.NumberFormat(window.LOCALE, {
-        style: "currency",
-        currency: currency,
-      }).format(value);
+      try {
+        return new Intl.NumberFormat(window.LOCALE, {
+          style: "currency",
+          currency: currency,
+        }).format(value);
+      } catch {
+        return (
+          new Intl.NumberFormat(window.LOCALE).format(value) +
+          " " +
+          String(currency)
+        );
+      }
       // + " " +
       // currency.toUpperCase()
     },
@@ -175,7 +192,7 @@ window.windowMixin = {
       return new Intl.NumberFormat(window.LOCALE).format(value) + " msat";
     },
     notifyApiError: function (error) {
-      var types = {
+      const types = {
         400: "warning",
         401: "warning",
         500: "negative",
@@ -306,7 +323,7 @@ window.windowMixin = {
 
     // addEventListener("beforeunload", (event) => {
     //   event.preventDefault();
-    //   var dialogText = "Are you sure about this?";
+    //   const dialogText = "Are you sure about this?";
     //   event.returnValue = dialogText;
     //   return dialogText;
     // });

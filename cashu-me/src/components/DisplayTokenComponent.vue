@@ -127,6 +127,7 @@
               class="q-mx-none"
               dense
               color="negative"
+              data-testid="delete-token"
               icon="delete"
               size="sm"
               @click="
@@ -145,6 +146,7 @@
             size="md"
             flat
             dense
+            data-testid="token-more"
             @click="toggleExpandButtons"
           >
             <q-icon
@@ -271,6 +273,7 @@
             size="lg"
             color="primary"
             rounded
+            data-testid="copy-ecash-token"
             @click="copyTokens"
           >
             {{ copyButtonLabel }}
@@ -322,21 +325,18 @@ import { Buffer } from "buffer";
 import { UR, UREncoder } from "@gandlaf21/bc-ur";
 import { mapActions, mapState, mapWritableState } from "pinia";
 import { useSendTokensStore } from "src/stores/sendTokensStore";
-import { useWorkersStore } from "src/stores/workers";
+import { useTransactionWorkerStore } from "src/stores/transactionWorker";
 import { useUiStore } from "src/stores/ui";
 import { useCameraStore } from "src/stores/camera";
 import { useSettingsStore } from "src/stores/settings";
 import { useTokensStore } from "src/stores/tokens";
+import { useMintsStore } from "src/stores/mints";
 import TokenInformation from "components/TokenInformation.vue";
 import MeltQuoteInformation from "components/MeltQuoteInformation.vue";
 import SendPaymentRequest from "./SendPaymentRequest.vue";
 import PaymentRequestInfo from "./PaymentRequestInfo.vue";
-import {
-  getDecodedToken,
-  getEncodedTokenBinary,
-  getEncodedToken,
-  getEncodedTokenV4,
-} from "@cashu/cashu-ts";
+import { getDecodedToken, getEncodedTokenBinary } from "@cashu/cashu-ts";
+import { sumProofAmounts } from "src/js/proofs";
 import token from "src/js/token";
 import { notifyError, notifySuccess } from "src/js/notify";
 import { copyToClipboard } from "quasar";
@@ -380,7 +380,6 @@ export default defineComponent({
       fragmentIntervalFast: 150,
       framentInervalSlow: 500,
       fragmentSpeedLabel: "F",
-      isV4Token: false,
       scanningCard: false,
       showExpandedButtons: false,
       showDeleteDialog: false,
@@ -392,26 +391,28 @@ export default defineComponent({
     ...mapWritableState(useSendTokensStore, ["showSendTokens", "sendData"]),
     ...mapWritableState(useCameraStore, ["hasCamera"]),
     ...mapState(useUiStore, ["ndefSupported", "webShareSupported"]),
-    ...mapState(useWorkersStore, ["tokenWorkerRunning"]),
+    ...mapState(useTransactionWorkerStore, ["outgoingPayments"]),
     ...mapState(useSettingsStore, ["nfcEncoding"]),
     // display helpers
     sumProofs: function () {
-      let proofs = token.getProofs(token.decode(this.sendData.tokensBase64));
-      return proofs.flat().reduce((sum, el) => (sum += el.amount), 0);
+      return token.decodeMeta(this.sendData.tokensBase64)?.amount ?? 0;
     },
     displayUnit: function () {
-      let display = this.formatCurrency(this.sumProofs, this.tokenUnit);
+      const display = this.formatCurrency(this.sumProofs, this.tokenUnit);
       return display;
     },
     tokenUnit: function () {
-      let unit = token.getUnit(token.decode(this.sendData.tokensBase64));
-      return unit;
+      const decoded = token.decodeMeta(this.sendData.tokensBase64);
+      return decoded ? token.getUnit(decoded) : "";
     },
     paidFees: function () {
-      return this.sumProofs - Math.abs(this.sendData.historyAmount);
+      return this.sumProofs - Math.abs(this.sendData.historyAmount ?? 0);
     },
     runnerActive: function () {
-      return this.tokenWorkerRunning;
+      return this.outgoingPayments.some(
+        (entry) =>
+          entry.type === "token" && entry.id === this.sendData.tokensBase64
+      );
     },
     copyButtonLabel: function () {
       if (this.copyButtonCopied) {
@@ -426,7 +427,7 @@ export default defineComponent({
       if (!val?.length) {
         return;
       }
-      const tokenObj = token.decode(val);
+      const tokenObj = token.decodeMeta(val);
       const proofs = tokenObj.proofs || [];
       if (!proofs.length) {
         return;
@@ -437,11 +438,12 @@ export default defineComponent({
         this.qrCodeFragment = "";
         this.startQrCodeLoop();
       }
-      this.isV4Token = val.startsWith("cashuB");
     },
   },
   methods: {
-    ...mapActions(useWorkersStore, ["clearAllWorkers"]),
+    ...mapActions(useTransactionWorkerStore, [
+      "removeOutgoingTokenFromChecker",
+    ]),
     ...mapActions(useTokensStore, ["deleteToken"]),
     ...mapActions(useCameraStore, ["showCamera"]),
     copyUsingMixin(text: string) {
@@ -457,7 +459,7 @@ export default defineComponent({
         this.qrCodeFragment = "";
         return;
       }
-      const tokenObj = token.decode(val);
+      const tokenObj = token.decodeMeta(val);
       const proofs = tokenObj.proofs || [];
       if (!proofs.length) {
         this.qrCodeFragment = "";
@@ -469,7 +471,6 @@ export default defineComponent({
         this.qrCodeFragment = "";
         this.startQrCodeLoop();
       }
-      this.isV4Token = val.startsWith("cashuB");
     },
     startQrCodeLoop: async function () {
       if (this.sendData.tokensBase64.length == 0) {
@@ -512,22 +513,6 @@ export default defineComponent({
         this.fragmentLengthLabel = "M";
       }
       this.startQrCodeLoop();
-    },
-    toggleTokenEncoding: function () {
-      const decodedToken = getDecodedToken(this.sendData.tokensBase64);
-      if (this.sendData.tokensBase64.startsWith("cashuA")) {
-        try {
-          this.sendData.tokensBase64 = getEncodedTokenV4(decodedToken);
-        } catch {
-          this.sendData.tokensBase64 = getEncodedToken(decodedToken, {
-            version: 3,
-          });
-        }
-      } else {
-        this.sendData.tokensBase64 = getEncodedToken(decodedToken, {
-          version: 3,
-        });
-      }
     },
     encodeToPeanut: function (tokenStr: string) {
       return (
@@ -602,9 +587,10 @@ export default defineComponent({
                         },
                       ];
                       break;
-                    case "binary":
+                    case "binary": {
                       const decoded = getDecodedToken(
-                        this.sendData.tokensBase64
+                        this.sendData.tokensBase64,
+                        useMintsStore().allMintKeysets.map((k) => k.id)
                       );
                       const data = getEncodedTokenBinary(decoded);
                       records = [
@@ -615,6 +601,7 @@ export default defineComponent({
                         },
                       ];
                       break;
+                    }
                     default:
                       throw new Error(
                         `Unknown NFC encoding: ${this.nfcEncoding}`
@@ -660,10 +647,11 @@ export default defineComponent({
       this.scanningCard = false;
     },
     deleteThisToken: function () {
-      this.deleteToken(this.sendData.tokensBase64);
+      const tokenToDelete = this.sendData.tokensBase64;
+      this.removeOutgoingTokenFromChecker(tokenToDelete);
+      this.deleteToken(tokenToDelete);
       this.showSendTokens = false;
       this.showDeleteDialog = false;
-      this.clearAllWorkers();
     },
     copyTokens: async function () {
       try {

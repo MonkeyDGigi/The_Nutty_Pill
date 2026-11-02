@@ -172,10 +172,10 @@ export default defineComponent({
     EssentialLink,
   },
   setup() {
-    const router = useRouter();
+    const { t } = useI18n();
     const leftDrawerOpen = ref(false);
     const uiStore = useUiStore();
-    const { t } = useI18n();
+    const router = useRouter();
     const countdown = ref(0);
     let countdownInterval;
 
